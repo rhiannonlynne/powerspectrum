@@ -1,3 +1,5 @@
+# Code written by Jessica Lu, taken from AstroBetter. Thanks Jessica & AstroBetter!
+
 import numpy as np
 
 def azimuthalAverage(image, center=None):
