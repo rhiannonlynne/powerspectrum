@@ -56,7 +56,9 @@ class TestImage():
         if ycen == None:
             ycen = self.ny/2.0
         self.fimage = None
-        self.image += value*numpy.exp(-(self.xx-xcen)**2/(2.0*xwidth**2) - (self.yy-ycen)**2/(2.0*ywidth**2))
+        gaussian = (1/(2.0*numpy.pi*xwidth*ywidth)
+                    *numpy.exp(-(self.xx-xcen)**2/(2.0*xwidth**2) - (self.yy-ycen)**2/(2.0*ywidth**2)))
+        self.image += gaussian * value / gaussian.max()
         return
 
     def addLines(self, spacing=10, angle=0.0, value=1.0, width=1):
@@ -141,13 +143,15 @@ class TestImage():
             # Add to image.
             self.image += ellipses
         return
-
  
-    def makeFft(self, shift=False):
+    def makeFft(self, shift=True):
+        """Take the 2d FFT of the image, adding a shift to move the small spatial scales to the
+        center of the FFT image (shift=False cancels this shift). """
         self.fimage = fftpack.fft2(self.image)
         if shift:
             self.fimage = fftpack.fftshift(self.fimage)
         return
+
 
     def makePsd(self):
         """Calculate the power spectrum - 2d and 1d."""
@@ -155,7 +159,7 @@ class TestImage():
             print 'FFT needed first: calling makeFft (with no shift)'
             self.makeFft()
         # Calculate 2d power spectrum
-        self.psd2d = numpy.abs(self.fimage)**2.0
+        self.psd2d = numpy.absolute(self.fimage)**2.0
         # Calculate 2d power spectrum
         self.psd1d = radialProfile.azimuthalAverage(self.psd2d)
         return
