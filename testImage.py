@@ -144,7 +144,7 @@ class TestImage():
 
  
     def makeFft(self, shift=False):
-        self.fimage = fftpack.fft(self.image)
+        self.fimage = fftpack.fft2(self.image)
         if shift:
             self.fimage = fftpack.fftshift(self.fimage)
         return
