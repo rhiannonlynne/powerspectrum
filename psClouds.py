@@ -2,11 +2,21 @@ import numpy as np
 import testImage as t
 from pylab import *
 
+
+def zpad(image):
+    """Stupid old version of numpy doesn't have pad module in it """
+    xsize,ysize=image.shape
+    padded = np.zeros( (xsize*2,ysize*2))
+    padded[xsize/2:xsize*1.5,ysize/2:ysize*1.5] = image
+    return padded
+
+
 oldCLouds = np.load('oldclouds.npy')
 newClouds = np.load('newclouds.npy')
 
 ack = t.TestImage()
-cloudim = oldCLouds.copy()
+cloudim = zpad(oldCLouds.copy())
+
 ack.setImage(cloudim)
 
 ack.makeFft()
@@ -32,7 +42,7 @@ ylabel('1-D Power Spectrum')
 savefig('oldclouds.png',type='png')
 clf()
 
-cloudim = newClouds.copy()
+cloudim = zpad(newClouds.copy())
 ack.setImage(cloudim)
 ack.makeFft()
 ack.makePsd()
