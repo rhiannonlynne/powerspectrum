@@ -2,17 +2,15 @@ import pylab
 from testImage import TestImage
 
 im = TestImage()
-im.addGaussian(xwidth=100, ywidth=100)
-im.showImage()
-
+im.addGaussian(xwidth=20, ywidth=20)
 im.makeFft()
-im.showFft()
 im.makePsd()
-im.showPsd1d()
+im.makeAcf()
 
-im.makeFft(shift=True)
+im.showImage()
 im.showFft()
-im.makePsd()
+im.showPsd2d()
 im.showPsd1d()
+im.showAcf()
 
 pylab.show()

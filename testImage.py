@@ -1,7 +1,6 @@
 import numpy
 import pylab
 from scipy import fftpack
-import radialProfile 
 
 # Comments on additional useful resources: 
 # book chapter 10
@@ -11,11 +10,8 @@ import radialProfile
 # 'compressive sensing' (Emanuel Condes, also David Donaho, @ Stanford Math, Terry Towel)
 
 # TODO
-# Investigate fft axis shift
-# Investigate zeropadding of original image
 # Investigate adding filter to FFT of image (to smooth edge effects)
-# Investigate ACF
-# Investigate SF
+
 
 class TestImage():
     def __init__(self, nx=500, ny=500):
@@ -32,10 +28,28 @@ class TestImage():
         """Set the image using an external numpy array"""
         self.image = imdat    
         self.ny, self.nx = self.image.shape
-        self.yy, self.yy = numpy.indices(self.image.shape)
+        self.yy, self.xx = numpy.indices(self.image.shape)
         self.fimage = None
         return
 
+    def zeroPad(self, width=None):
+        """Add padding to the outside of the image data. """
+        offsetx = numpy.floor(self.nx / 4.0)
+        offsety = numpy.floor(self.ny / 4.0)
+        newy = self.ny + int(2*offsetx)
+        newx = self.nx + int(2*offsety)
+        newimage = numpy.zeros((newy, newx), 'float')
+        newyy, newxx = numpy.indices(newimage.shape)
+        condition = ((newxx >= offsetx) & (newxx < offsetx + self.nx) & (newyy >= offsety) & (newyy < offsety + self.ny))
+        newimage[condition] = self.image.flatten()
+        self.nx = newx
+        self.ny = newy
+        self.xx = newxx
+        self.yy = newyy
+        self.image = newimage
+        self.fimage = None
+        return
+        
     def addNoise(self, sigma=1.0):
         """Add gaussian noise to the image, mean=0, sigma=noiseSigma."""
         noise = numpy.random.normal(loc=0, scale=sigma, size=(self.nx, self.ny))
@@ -56,7 +70,8 @@ class TestImage():
         if ycen == None:
             ycen = self.ny/2.0
         self.fimage = None
-        self.image += value*numpy.exp(-(self.xx-xcen)**2/(2.0*xwidth**2) - (self.yy-ycen)**2/(2.0*ywidth**2))
+        gaussian = numpy.exp(-(self.xx-xcen)**2/(2.0*xwidth**2) - (self.yy-ycen)**2/(2.0*ywidth**2))
+        self.image += gaussian * value / gaussian.max()
         return
 
     def addLines(self, spacing=10, angle=0.0, value=1.0, width=1):
@@ -141,31 +156,99 @@ class TestImage():
             # Add to image.
             self.image += ellipses
         return
-
  
-    def makeFft(self, shift=False):
+    def makeFft(self):
+        """Take the 2d FFT of the image (self.fimage), adding a shift to move the small spatial scales to the
+        center of the FFT image to self.fimage2. Also calculates the frequencies. """
         self.fimage = fftpack.fft2(self.image)
-        if shift:
-            self.fimage = fftpack.fftshift(self.fimage)
+        self.fimage2 = fftpack.fftshift(self.fimage)
+        self.xfreq = fftpack.fftfreq(self.nx, 1.0)
+        self.yfreq = fftpack.fftfreq(self.ny, 1.0)
         return
+
 
     def makePsd(self):
         """Calculate the power spectrum - 2d and 1d."""
         if self.fimage == None:
-            print 'FFT needed first: calling makeFft (with no shift)'
+            print 'FFT needed first: calling makeFft'
             self.makeFft()
         # Calculate 2d power spectrum
-        self.psd2d = numpy.abs(self.fimage)**2.0
-        # Calculate 2d power spectrum
-        self.psd1d = radialProfile.azimuthalAverage(self.psd2d)
+        self.psd2d = numpy.absolute(self.fimage)**2.0
+        # Use both shifted and non-shifted FFT because 1d PSD needs shifted.
+        self.psd2d2 = numpy.absolute(self.fimage2)**2.0
+        # Calculate 1d power spectrum                
+        #  - use shifted FFT so that can create radial bins from center.        
+        xcen = round(self.nx/2.0)
+        ycen = round(self.ny/2.0)        
+        # Calculate all the radius values for all pixels
+        rvals = numpy.hypot((self.xx-xcen), (self.yy-ycen))
+        # Calculate the unique radius values (the bins we want to use for psd1d)
+        rbinsize = 1.0
+        r = numpy.arange(0, rvals.max()+rbinsize, rbinsize)
+        rcenters = (r[1:] + r[:-1])/2.0
+        # Sort the PSD2d by the radius values
+        idx = numpy.argsort(rvals.flatten())
+        dvals = self.psd2d2.flatten()[idx]
+        rvals = rvals.flatten()[idx]
+        # Calculate how many pixels are actually present in each radius bin (for weighting)
+        # Number of pixels in each radius bin
+        nvals = numpy.histogram(rvals, r)[0]
+        # Value of image in each radial bin (sum)
+        rprof = numpy.histogram(rvals, r, weights=dvals)[0] / nvals
+        # Set the value of the 1d psd, and interpolate over any nans (where there were no pixels)
+        self.psd1d = numpy.interp(rcenters, rcenters[rprof==rprof], rprof[rprof==rprof])
+        self.rcenters = rcenters
+        # frequencies for radius 
+        self.rfreq = (fftpack.fftfreq(len(self.rcenters), rbinsize))
         return
 
-    def makeSF(self):
-        """Calculate the structure function. """        
-        pass
-    
+    def makeAcf(self):
+        """Calculate the auto correlation function. """
+        self.acf = fftpack.fftshift(fftpack.ifft2(self.psd2d))
+        return
+
+    def showXSlice(self, y=None, source='image'):
+        """Plot a 1d slice through the image (or fft or psd), at y (if None, defaults to center)."""
+        if y == None:
+            y = round(self.ny / 2.0)
+        if source == 'image':
+            x = numpy.arange(0, self.nx)
+            pylab.plot(x, self.image[y][:])
+        elif source == 'fft':
+            # have to adjust y for the fact that fimage has 'shifted' axis versus fimage2 (but xfreq goes with fimage)
+            y = self.ny/2.0 - y
+            pylab.plot(self.xfreq, self.fimage[y][:].real, 'k.')
+        elif source == 'psd':
+            y = self.ny/2.0 - y
+            pylab.plot(self.xfreq, self.psd2d[y][:], 'k.')
+        elif source == 'acf':
+            x = numpy.arange(0, self.nx)
+            pylab.plot(x, self.acf[y][:])
+        else:
+            raise Exception('Source must be one of image/fft/psd/acf')
+        return
+
+    def showYSlice(self, x=None):
+        """Plot a 1d slice through the image, at x (if None, defaults to center)."""
+        if x == None:
+            x = round(self.nx/2.0)
+        if source == 'image':
+            y = numpy.arange(0, self.ny)
+            pylab.plot(y, self.image[:][x])
+        elif source == 'fft':
+            pylab.plot(self.yfreq, self.fimage[:][x].real, 'k.')
+        elif source == 'psd':
+            pylab.plot(self.yfreq, self.psd2d[:][x], 'k.')
+        elif source == 'acf':
+            y = numpy.arange(0, self.ny)
+            pylab.plot(y, self.acf[:][x])
+        else:
+            raise Exception('Source must be one of image/fft/psd/acf.')
+        return
+
     def showImage(self, xlim=None, ylim=None):
         pylab.figure()
+        pylab.title('Image')
         if xlim == None:
             x0 = 0
             x1 = self.nx
@@ -184,21 +267,57 @@ class TestImage():
         cb = pylab.colorbar()
         pylab.xlim(x0, x1)
         pylab.ylim(y0, y1)
+        return
 
-    def showFft(self):
-        pylab.figure()
-        pylab.imshow(self.fimage.real, origin='lower')
-        pylab.xlabel('X')
-        pylab.ylabel('Y')
-        cb = pylab.colorbar()
+    def showFft(self, real=True, imag=False):
+        if ((real == True) & (imag==True)):
+            p = 2
+        else:
+            p = 1            
+        pylab.figure()        
+        pylab.title('FFT')
+        if real:
+            pylab.subplot(1,p,1)
+            pylab.title('Real')
+            pylab.imshow(self.fimage2.real, origin='lower', extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
+            pylab.xlabel('u')
+            pylab.ylabel('v')
+            cb = pylab.colorbar()
+        if imag:
+            pylab.subplot(1,p,p)
+            pylab.title('Imaginary')
+            pylab.imshow(self.fimage2.imag, origin='lower', extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
+            pylab.xlabel('u')
+            pylab.ylabel('v')
+            cb = pylab.colorbar()
+        return
 
-    def showPsd2d(self):
+    def showPsd2d(self, log=True):
         pylab.figure()
-        pylab.imshow(self.psd2d, origin='lower')
+        pylab.title('2d Power Spectrum')
+        if log==True:
+            from matplotlib.colors import LogNorm
+            norml = LogNorm()
+            pylab.imshow(self.psd2d2, origin='lower', extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()], norm=norml)
+        else:
+            pylab.imshow(self.psd2d2, origin='lower', extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
         cb = pylab.colorbar()
+        return
 
     def showPsd1d(self):
         pylab.figure()
-        pylab.semilogy(self.psd1d)
-        pylab.xlabel('Spatial Frequency')
+        pylab.subplot(121)
+        pylab.semilogy(self.rfreq, self.psd1d)
+        pylab.xlabel('Frequency')
         pylab.ylabel('1-D Power Spectrum')
+        pylab.subplot(122)
+        pylab.semilogy(self.rcenters, self.psd1d)
+        pylab.xlabel('Spatial scale (pix)')
+        return
+
+    def showAcf(self):
+        pylab.figure()
+        pylab.title('ACF')
+        pylab.imshow(self.acf.real, origin='lower')
+        cb = pylab.colorbar()
+        return
