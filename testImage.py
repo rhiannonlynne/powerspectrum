@@ -33,14 +33,15 @@ class TestImage():
         return
 
     def zeroPad(self, width=None):
-        """Add padding to the outside of the image data. """
-        offsetx = numpy.floor(self.nx / 4.0)
-        offsety = numpy.floor(self.ny / 4.0)
+        """Add padding to the outside of the image data. Default width = 1/2 of image."""
+        offsetx = numpy.floor(self.nx / 2.0)
+        offsety = numpy.floor(self.ny / 2.0)
         newy = self.ny + int(2*offsetx)
         newx = self.nx + int(2*offsety)
         newimage = numpy.zeros((newy, newx), 'float')
         newyy, newxx = numpy.indices(newimage.shape)
-        condition = ((newxx >= offsetx) & (newxx < offsetx + self.nx) & (newyy >= offsety) & (newyy < offsety + self.ny))
+        condition = ((newxx >= offsetx) & (newxx < offsetx + self.nx) &
+                     (newyy >= offsety) & (newyy < offsety + self.ny))
         newimage[condition] = self.image.flatten()
         self.nx = newx
         self.ny = newy
@@ -62,6 +63,14 @@ class TestImage():
         self.image = numpy.zeros((self.ny, self.nx), 'float') + value
         return
 
+    def addSin(self, scale=(2*numpy.pi), value=1.0):
+        """Add a sin variation to the images,
+        z = sin(2pi*x/scale) * sin(2pi*y/scale), with peak of 'value'. """
+        self.fimage = None
+        z = numpy.sin(2.0*numpy.pi*self.xx/scale) * numpy.sin(2.0*numpy.pi*self.yy/scale)
+        self.image += z * value
+        return
+        
     def addGaussian(self, xwidth=100., ywidth=100., xcen=None, ycen=None, value=1.0):
         """Add a 2-d gaussian to the image with widths xwidth/ywidth.
         Can specify xcen/ycen (default=Center of image) and peak value of gaussian."""
@@ -86,6 +95,19 @@ class TestImage():
         self.image += lines
         return
 
+    def addRectangle(self, widthX=50., widthY=20., value=1.0, cx=None, cy=None):
+        """Add a rectangle with width widthX/widthY centered at cx/cy (if None, use center). """
+        self.fimage = None
+        if cx == None:
+            cx = self.nx/2.0
+        if cy == None:
+            cy = self.ny/2.0
+        tmpx = numpy.abs(self.xx - cx)/2.0
+        tmpy = numpy.abs(self.yy - cy)/2.0
+        rectangle = numpy.where((tmpx<=widthX/4.0) & (tmpy<=widthY/4.0), value, 0)
+        self.image += rectangle
+        return
+            
     def addCircle(self, radius=5.0, value=1.0, cx=None, cy=None):
         """Add a circle to cx/cy (if None, use center) of the image, with 'radius' and value of value."""
         self.fimage = None
@@ -95,7 +117,7 @@ class TestImage():
         if cy == None:
             cy = self.ny/2.0
         tmp = (self.xx - cx)**2 + (self.yy - cy)**2
-        circle = numpy.where(tmp<radius, value, 0)
+        circle = numpy.where(tmp<=radius**2, value, 0)
         self.image += circle
         return
 
@@ -179,13 +201,14 @@ class TestImage():
         # Calculate 1d power spectrum                
         #  - use shifted FFT so that can create radial bins from center.        
         xcen = round(self.nx/2.0)
-        ycen = round(self.ny/2.0)        
+        ycen = round(self.ny/2.0)
         # Calculate all the radius values for all pixels
         rvals = numpy.hypot((self.xx-xcen), (self.yy-ycen))
         # Calculate the unique radius values (the bins we want to use for psd1d)
-        rbinsize = 1.0
+        rbinsize = 2.0
         r = numpy.arange(0, rvals.max()+rbinsize, rbinsize)
         rcenters = (r[1:] + r[:-1])/2.0
+        #print rcenters
         # Sort the PSD2d by the radius values
         idx = numpy.argsort(rvals.flatten())
         dvals = self.psd2d2.flatten()[idx]
@@ -215,7 +238,8 @@ class TestImage():
             x = numpy.arange(0, self.nx)
             pylab.plot(x, self.image[y][:])
         elif source == 'fft':
-            # have to adjust y for the fact that fimage has 'shifted' axis versus fimage2 (but xfreq goes with fimage)
+            # have to adjust y for the fact that fimage has 'shifted' axis versus fimage2
+            #  (but xfreq goes with fimage)
             y = self.ny/2.0 - y
             pylab.plot(self.xfreq, self.fimage[y][:].real, 'k.')
         elif source == 'psd':
@@ -275,18 +299,19 @@ class TestImage():
         else:
             p = 1            
         pylab.figure()        
-        pylab.title('FFT')
         if real:
             pylab.subplot(1,p,1)
-            pylab.title('Real')
-            pylab.imshow(self.fimage2.real, origin='lower', extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
+            pylab.title('Real FFT')
+            pylab.imshow(self.fimage2.real, origin='lower',
+                         extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
             pylab.xlabel('u')
             pylab.ylabel('v')
             cb = pylab.colorbar()
         if imag:
             pylab.subplot(1,p,p)
-            pylab.title('Imaginary')
-            pylab.imshow(self.fimage2.imag, origin='lower', extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
+            pylab.title('Imaginary FFT')
+            pylab.imshow(self.fimage2.imag, origin='lower',
+                         extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
             pylab.xlabel('u')
             pylab.ylabel('v')
             cb = pylab.colorbar()
@@ -298,20 +323,24 @@ class TestImage():
         if log==True:
             from matplotlib.colors import LogNorm
             norml = LogNorm()
-            pylab.imshow(self.psd2d2, origin='lower', extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()], norm=norml)
+            pylab.imshow(self.psd2d2, origin='lower', extent=[self.xfreq.min(), self.xfreq.max(),
+                                                              self.yfreq.min(), self.yfreq.max()], norm=norml)
         else:
-            pylab.imshow(self.psd2d2, origin='lower', extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
+            pylab.imshow(self.psd2d2, origin='lower', extent=[self.xfreq.min(), self.xfreq.max(),
+                                                              self.yfreq.min(), self.yfreq.max()])
         cb = pylab.colorbar()
+        pylab.xlabel('u')
+        pylab.ylabel('v')
         return
 
     def showPsd1d(self):
         pylab.figure()
         pylab.subplot(121)
-        pylab.semilogy(self.rfreq, self.psd1d)
+        pylab.semilogy(self.rfreq, self.psd1d, 'k.')
         pylab.xlabel('Frequency')
         pylab.ylabel('1-D Power Spectrum')
         pylab.subplot(122)
-        pylab.semilogy(self.rcenters, self.psd1d)
+        pylab.semilogy(self.rcenters, self.psd1d, 'k.')
         pylab.xlabel('Spatial scale (pix)')
         return
 
@@ -319,5 +348,61 @@ class TestImage():
         pylab.figure()
         pylab.title('ACF')
         pylab.imshow(self.acf.real, origin='lower')
+        pylab.xlabel('X')
+        pylab.ylabel('Y')
         cb = pylab.colorbar()
+        return
+
+    def makeAll(self):
+        self.makeFft()
+        self.makePsd()
+        self.makeAcf()
+        return
+
+    def plotAll(self, title=None):
+        pylab.figure()        
+        pylab.subplots_adjust(left=0.1, right=0.97, wspace=0.45, hspace=0.2)
+        ax1 = pylab.subplot2grid((2,3),(0,0))
+        pylab.imshow(self.image, origin='lower')
+        pylab.xticks(rotation=45)
+        pylab.xlabel('X')
+        pylab.ylabel('Y')
+        cb = pylab.colorbar(shrink=0.7)
+        clims = cb.get_clim()
+        pylab.title('Image')
+        ax2 = pylab.subplot2grid((2,3), (0,1))
+        pylab.imshow(self.fimage2.real, origin='lower', vmin=clims[0], vmax=clims[1],
+                     extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
+        pylab.xticks(rotation=45)
+        pylab.xlabel('u')
+        pylab.ylabel('v')
+        cb = pylab.colorbar(shrink=0.7)
+        pylab.title('Real FFT')
+        ax3 = pylab.subplot2grid((2,3), (1,0))
+        from matplotlib.colors import LogNorm
+        norml = LogNorm()
+        pylab.imshow(self.psd2d2, origin='lower', extent=[self.xfreq.min(), self.xfreq.max(),
+                                                          self.yfreq.min(), self.yfreq.max()], norm=norml)
+        cb = pylab.colorbar(shrink=0.7)
+        pylab.xticks(rotation=45)
+        pylab.xlabel('u')
+        pylab.ylabel('v')
+        pylab.title('2d Power Spectrum')
+        ax4 = pylab.subplot2grid((2,3), (1,1))
+        pylab.imshow(self.acf.real, origin='lower')
+        pylab.xticks(rotation=45)
+        pylab.xlabel('X')
+        pylab.ylabel('Y')
+        cb = pylab.colorbar(shrink=0.7)
+        pylab.title('ACF')
+        ax5 = pylab.subplot2grid((2,3), (0,2), rowspan=2)
+        pylab.semilogy(self.rcenters, self.psd1d, 'k.')
+        pylab.xticks(rotation=45)
+        pylab.xlabel('Spatial Scale (pix)')
+        pylab.title('1-D Power Spectrum')
+        pos1 = ax2.get_position().bounds
+        pos2 = ax4.get_position().bounds
+        ax5.set_position([0.77, 0.2, pos2[2]*1.2, pos2[3]*1.5]) 
+        if title!=None:
+            pylab.suptitle(title, fontsize=14)
         return
