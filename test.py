@@ -18,6 +18,12 @@ im.zeroPad()
 im.makeAll()
 im.plotAll(title='Gaussian Noise')
 
+im = TestImage()
+im.addNoise()
+im.zeroPad()
+im.makeAll(binsize=8)
+im.plotAll(title='Gaussian Noise')
+
 # Gaussian image
 im = TestImage()
 im.addGaussian(xwidth=20, ywidth=20)
@@ -79,7 +85,7 @@ im.plotAll(title='Ellipse, random')
 
 # ellipses, random locations, with noise
 im = TestImage()
-im.addEllipseRandom()
+im.addEllipseRandom(value=5)
 im.addNoise()
 im.zeroPad()
 im.makeAll()

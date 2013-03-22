@@ -2,12 +2,29 @@ import numpy
 import pylab
 from scipy import fftpack
 
+# For plotting an image in log scale
+from matplotlib.colors import LogNorm
+# For determining the best bin width for a histogram
+try:
+    from astroML.plotting import hist
+    use_astroML = True
+except ImportError:
+    use_astroML = False
+
+
 # Comments on additional useful resources: 
 # book chapter 10
 # book appendix (see fft calculations in appendix)
+
+# further information (to be read) about structure functions & more complicated analysis
 # Peter Coles (Nature) papers about SF phases
 # see also Szalay & Landry(?) data-data / data-random / random-random FFT analysis (FFT in presence of gaps)
 # 'compressive sensing' (Emanuel Condes, also David Donaho, @ Stanford Math, Terry Towel)
+
+# also relevant
+# book 4.8.1 on histograms (choosing locations of bins - for radial profile) & chapter 5.7.2 (use bayesian blocks)
+
+# radial profile heavily influenced by Adam Ginsburg's agpy code 
 
 # TODO
 # Investigate adding filter to FFT of image (to smooth edge effects)
@@ -21,6 +38,8 @@ class TestImage():
         self.ny = ny        
         self.image = numpy.zeros((self.ny, self.nx), 'float')
         self.yy, self.xx = numpy.indices(self.image.shape)
+        self.padx = 0.0
+        self.pady = 0.0
         self.fimage = None
         return
 
@@ -29,13 +48,17 @@ class TestImage():
         self.image = imdat    
         self.ny, self.nx = self.image.shape
         self.yy, self.xx = numpy.indices(self.image.shape)
-        self.fimage = None
+        self.padx = 0.0
+        self.pady = 0.0
+        self.fimage = None        
         return
 
     def zeroPad(self, width=None):
-        """Add padding to the outside of the image data. Default width = 1/2 of image."""
-        offsetx = numpy.floor(self.nx / 2.0)
-        offsety = numpy.floor(self.ny / 2.0)
+        """Add padding to the outside of the image data. Default width = 1/4 of image."""
+        offsetx = numpy.floor(self.nx / 4.0)
+        offsety = numpy.floor(self.ny / 4.0)
+        self.padx = offsetx
+        self.pady = offsety
         newy = self.ny + int(2*offsetx)
         newx = self.nx + int(2*offsety)
         newimage = numpy.zeros((newy, newx), 'float')
@@ -189,8 +212,11 @@ class TestImage():
         return
 
 
-    def makePsd(self):
-        """Calculate the power spectrum - 2d and 1d."""
+    def makePsd(self, binsize=None):
+        """Calculate the power spectrum - 2d and 1d.
+        If binsize is defined, this will be used. Otherwise, the optimum 'knuth' binsize is determined
+         using astroML (if available). If astroML is not available, and binsize is not defined, a default value
+         of 5.5 pixels is used. """
         if self.fimage == None:
             print 'FFT needed first: calling makeFft'
             self.makeFft()
@@ -204,25 +230,36 @@ class TestImage():
         ycen = round(self.ny/2.0)
         # Calculate all the radius values for all pixels
         rvals = numpy.hypot((self.xx-xcen), (self.yy-ycen))
-        # Calculate the unique radius values (the bins we want to use for psd1d)
-        rbinsize = 2.0
-        r = numpy.arange(0, rvals.max()+rbinsize, rbinsize)
-        rcenters = (r[1:] + r[:-1])/2.0
-        #print rcenters
-        # Sort the PSD2d by the radius values
+        # Sort the PSD2d by the radius values and make flattened representations of these.
         idx = numpy.argsort(rvals.flatten())
         dvals = self.psd2d2.flatten()[idx]
         rvals = rvals.flatten()[idx]
+        if binsize != None:
+            # User-specified binsize.
+            self.psd_binsize = binsize
+            b = numpy.arange(0, rvals.max() + binsize, binsize)
+        elif use_astroML:
+            # Use astroML to determine best (equal-size) binsize for radial binning. 
+            pylab.figure()            
+            n, b, p = hist(rvals, bins='knuth')
+            pylab.close()
+            self.psd_binsize = (b[1] - b[0])
+        else:
+            # Use best guess. 
+            self.psd_binsize = 5.5
+            b = numpy.arange(0, rvals.max() + binsize, binsize)
+        print 'Using binsize of %.3f' %(self.psd_binsize)
         # Calculate how many pixels are actually present in each radius bin (for weighting)
-        # Number of pixels in each radius bin
-        nvals = numpy.histogram(rvals, r)[0]
-        # Value of image in each radial bin (sum)
-        rprof = numpy.histogram(rvals, r, weights=dvals)[0] / nvals
+        nvals = numpy.histogram(rvals, bins=b)[0]
+        # Calculate the value of the image in each radial bin (weighted by the # of pixels in each bin)
+        rprof = numpy.histogram(rvals, bins=b, weights=dvals)[0] / nvals
+        # Calculate the central radius values used in the histograms
+        rcenters =  (b[1:] + b[:-1])/2.0
         # Set the value of the 1d psd, and interpolate over any nans (where there were no pixels)
         self.psd1d = numpy.interp(rcenters, rcenters[rprof==rprof], rprof[rprof==rprof])
         self.rcenters = rcenters
         # frequencies for radius 
-        self.rfreq = (fftpack.fftfreq(len(self.rcenters), rbinsize))
+        self.rfreq = (fftpack.fftfreq(len(self.rcenters), self.psd_binsize))
         return
 
     def makeAcf(self):
@@ -270,7 +307,7 @@ class TestImage():
             raise Exception('Source must be one of image/fft/psd/acf.')
         return
 
-    def showImage(self, xlim=None, ylim=None):
+    def showImage(self, xlim=None, ylim=None, clims=None):
         pylab.figure()
         pylab.title('Image')
         if xlim == None:
@@ -284,8 +321,11 @@ class TestImage():
             y1 = self.ny
         else:
             y0 = ylim[0]
-            y1 = ylim[1]            
-        pylab.imshow(self.image, origin='lower')
+            y1 = ylim[1]
+        if clims == None:
+            pylab.imshow(self.image, origin='lower')
+        else:
+            pylab.imshow(self.image, origin='lower', vmin=clims[0], vmax=clims[1])
         pylab.xlabel('X')
         pylab.ylabel('Y')
         cb = pylab.colorbar()
@@ -293,7 +333,7 @@ class TestImage():
         pylab.ylim(y0, y1)
         return
 
-    def showFft(self, real=True, imag=False):
+    def showFft(self, real=True, imag=False, clims=None):
         if ((real == True) & (imag==True)):
             p = 2
         else:
@@ -302,16 +342,24 @@ class TestImage():
         if real:
             pylab.subplot(1,p,1)
             pylab.title('Real FFT')
-            pylab.imshow(self.fimage2.real, origin='lower',
-                         extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
+            if clims==None:
+                pylab.imshow(self.fimage2.real, origin='lower',
+                             extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
+            else:
+                pylab.imshow(self.fimage2.real, origin='lower', vmin=clims[0], vmax=clims[1],
+                             extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
             pylab.xlabel('u')
             pylab.ylabel('v')
             cb = pylab.colorbar()
         if imag:
             pylab.subplot(1,p,p)
             pylab.title('Imaginary FFT')
-            pylab.imshow(self.fimage2.imag, origin='lower',
-                         extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
+            if clims == None:
+                pylab.imshow(self.fimage2.imag, origin='lower',
+                             extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
+            else:
+                pylab.imshow(self.fimage2.imag, origin='lower', vmin=clims[0], vmax=clims[1],
+                             extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
             pylab.xlabel('u')
             pylab.ylabel('v')
             cb = pylab.colorbar()
@@ -342,6 +390,7 @@ class TestImage():
         pylab.subplot(122)
         pylab.semilogy(self.rcenters, self.psd1d, 'k.')
         pylab.xlabel('Spatial scale (pix)')
+        pylab.title('1-d Power Spectrum, Radial binsize=%.3f' %(self.psd_binsize))
         return
 
     def showAcf(self):
@@ -353,9 +402,9 @@ class TestImage():
         cb = pylab.colorbar()
         return
 
-    def makeAll(self):
+    def makeAll(self, binsize=None):
         self.makeFft()
-        self.makePsd()
+        self.makePsd(binsize=binsize)
         self.makeAcf()
         return
 
@@ -369,7 +418,7 @@ class TestImage():
         pylab.ylabel('Y')
         cb = pylab.colorbar(shrink=0.7)
         clims = cb.get_clim()
-        pylab.title('Image')
+        pylab.title('Image', fontsize=12)
         ax2 = pylab.subplot2grid((2,3), (0,1))
         pylab.imshow(self.fimage2.real, origin='lower', vmin=clims[0], vmax=clims[1],
                      extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
@@ -377,9 +426,8 @@ class TestImage():
         pylab.xlabel('u')
         pylab.ylabel('v')
         cb = pylab.colorbar(shrink=0.7)
-        pylab.title('Real FFT')
+        pylab.title('Real FFT', fontsize=12)
         ax3 = pylab.subplot2grid((2,3), (1,0))
-        from matplotlib.colors import LogNorm
         norml = LogNorm()
         pylab.imshow(self.psd2d2, origin='lower', extent=[self.xfreq.min(), self.xfreq.max(),
                                                           self.yfreq.min(), self.yfreq.max()], norm=norml)
@@ -387,19 +435,21 @@ class TestImage():
         pylab.xticks(rotation=45)
         pylab.xlabel('u')
         pylab.ylabel('v')
-        pylab.title('2d Power Spectrum')
+        pylab.title('2d-PS', fontsize=12)
         ax4 = pylab.subplot2grid((2,3), (1,1))
         pylab.imshow(self.acf.real, origin='lower')
         pylab.xticks(rotation=45)
         pylab.xlabel('X')
         pylab.ylabel('Y')
         cb = pylab.colorbar(shrink=0.7)
-        pylab.title('ACF')
+        pylab.title('ACF', fontsize=12)
         ax5 = pylab.subplot2grid((2,3), (0,2), rowspan=2)
-        pylab.semilogy(self.rcenters, self.psd1d, 'k.')
+        maxradius_image = numpy.sqrt((self.nx/2.0-self.padx)**2 + (self.ny/2.0-self.pady)**2)
+        condition = (self.rcenters <= maxradius_image)
+        pylab.semilogy(self.rcenters[condition], self.psd1d[condition], 'k-')
         pylab.xticks(rotation=45)
         pylab.xlabel('Spatial Scale (pix)')
-        pylab.title('1-D Power Spectrum')
+        pylab.title('1-D PSD\n Radial binsize=%.3f' %(self.psd_binsize), fontsize=12)
         pos1 = ax2.get_position().bounds
         pos2 = ax4.get_position().bounds
         ax5.set_position([0.77, 0.2, pos2[2]*1.2, pos2[3]*1.5]) 
