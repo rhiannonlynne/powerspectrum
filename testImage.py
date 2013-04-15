@@ -1,6 +1,7 @@
 import numpy
 import pylab
-from pImage import PImage
+#from pImage import PImage
+from pImagePlots import PImagePlots
 
 # Comments on additional useful resources: 
 # book chapter 10
@@ -11,31 +12,31 @@ from pImage import PImage
 # see also Szalay & Landry(?) data-data / data-random / random-random FFT analysis (FFT in presence of gaps)
 # 'compressive sensing' (Emanuel Condes, also David Donaho, @ Stanford Math, Terry Towel)
 
-# also relevant
-# book 4.8.1 on histograms (choosing locations of bins - for radial profile) & chapter 5.7.2 (use bayesian blocks)
 
-# radial profile heavily influenced by Adam Ginsburg's agpy code 
-
-# TODO
-# Investigate adding filter to FFT of image (to smooth edge effects)
-
-
-class TestImage(PImage):
-    def __init__(self, nx=500, ny=500):
+class TestImage(PImagePlots):
+    def __init__(self, nx=500, ny=500, shift=True):
         """Initialize the test image, with an nx/ny size zero image."""
         # Note that numpy array translate to images in [y][x] order! 
-        self.nx = nx
-        self.ny = ny        
+        self.nx = int(nx)
+        self.ny = int(ny)
         self.image = numpy.zeros((self.ny, self.nx), 'float')
         self.yy, self.xx = numpy.indices(self.image.shape)
         self.padx = 0.0
         self.pady = 0.0
+        self.xcen = round(self.nx/2.0)
+        self.ycen = round(self.ny/2.0)
         self.fimage = None
+        self.psd2d = None
+        self.phasespec = None
+        self.psd1d = None
+        self.acf2d = None
+        self.acf1d = None
+        self.shift = shift
         return
         
     def addNoise(self, sigma=1.0):
         """Add gaussian noise to the image, mean=0, sigma=noiseSigma."""
-        noise = numpy.random.normal(loc=0, scale=sigma, size=(self.nx, self.ny))
+        noise = numpy.random.normal(loc=0, scale=sigma, size=(self.ny, self.nx))
         self.image += noise
         return
 
@@ -45,11 +46,11 @@ class TestImage(PImage):
         self.image = numpy.zeros((self.ny, self.nx), 'float') + value
         return
 
-    def addSin(self, scale=(2*numpy.pi), value=1.0):
+    def addSin(self, scale=(2.*numpy.pi), value=1.0):
         """Add a sin variation to the images,
         z = sin(2pi*x/scale) * sin(2pi*y/scale), with peak of 'value'. """
         self.fimage = None
-        z = numpy.sin(2.0*numpy.pi*self.xx/scale) * numpy.sin(2.0*numpy.pi*self.yy/scale)
+        z = numpy.sin(2.0*numpy.pi*self.xx/float(scale)) * numpy.sin(2.0*numpy.pi*self.yy/float(scale))
         self.image += z * value
         return
         
