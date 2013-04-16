@@ -101,7 +101,7 @@ class PImagePlots(PImage):
         pylab.ylim(y0, y1)
         return
 
-    def showFft(self, real=True, imag=True, clims=None):
+    def showFft(self, real=True, imag=True, clims=None, log=False):
         if ((real == True) & (imag==True)):
             p = 2
             shrinkratio=0.7
@@ -109,27 +109,31 @@ class PImagePlots(PImage):
             p = 1
             shrinkratio=0.9
         pylab.figure()        
+        if log:
+            from matplotlib.colors import LogNorm
+            norml = LogNorm()
+            if clims!=None:
+                if (clims[0] <0) | (clims[1]<0):
+                    print 'Using a log scale and clims < 0 does not work ...'
+                norml = LogNorm(vmin=clims[0], vmax=clims[1])
+        else:
+            from matplotlib.colors import Normalize
+            norml = Normalize()
+            if clims!=None:
+                norml = Normalize(vmin=clims[0], vmax=clims[1])
         if real:
             pylab.subplot(1,p,1)
             pylab.title('Real FFT')
-            if clims==None:
-                pylab.imshow(self.fimage.real, origin='lower',
-                             extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
-            else:
-                pylab.imshow(self.fimage.real, origin='lower', vmin=clims[0], vmax=clims[1],
-                             extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
+            pylab.imshow(self.fimage.real, origin='lower', norm=norml,
+                         extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
             pylab.xlabel('u')
             pylab.ylabel('v')
             cb = pylab.colorbar(shrink=shrinkratio)
         if imag:
             pylab.subplot(1,p,p)
             pylab.title('Imaginary FFT')
-            if clims == None:
-                pylab.imshow(self.fimage.imag, origin='lower',
-                             extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
-            else:
-                pylab.imshow(self.fimage.imag, origin='lower', vmin=clims[0], vmax=clims[1],
-                             extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
+            pylab.imshow(self.fimage.imag, origin='lower', norm=norml,
+                         extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
             pylab.xlabel('u')
             pylab.ylabel('v')
             cb = pylab.colorbar(shrink=shrinkratio)
@@ -143,15 +147,23 @@ class PImagePlots(PImage):
             p = 1
             shrinkratio=0.9
         pylab.figure()        
+        if log:
+            from matplotlib.colors import LogNorm
+            norml = LogNorm()
+            if clims!=None:
+                if (clims[0] <0) | (clims[1]<0):
+                    print 'Using a log scale and clims < 0 does not work ...'
+                norml = LogNorm(vmin=clims[0], vmax=clims[1])
+        else:
+            from matplotlib.colors import Normalize
+            norml = Normalize()
+            if clims!=None:
+                norml = Normalize(vmin=clims[0], vmax=clims[1])
         if real:
             pylab.subplot(1,p,1)
             pylab.title('Reconstructed Real FFT')
-            if clims==None:
-                pylab.imshow(self.fimageI.real, origin='lower',
-                             extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
-            else:
-                pylab.imshow(self.fimageI.real, origin='lower', vmin=clims[0], vmax=clims[1],
-                             extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
+            pylab.imshow(self.fimageI.real, origin='lower',
+                         extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
             pylab.xlabel('u')
             pylab.ylabel('v')
             cb = pylab.colorbar(shrink=shrinkratio)

@@ -205,9 +205,9 @@ class PImage():
 
     def _makeRandomPhases(self):
         # Generate random phases (uniform -360 to 360)
-        #self.phasespecI = numpy.random.uniform(low=-numpy.pi, high=numpy.pi, size=[self.ny, self.nx])
+        self.phasespecI = numpy.random.uniform(low=-numpy.pi, high=numpy.pi, size=[self.ny, self.nx])
         # Generate random phases with gaussian distribution around 0
-        self.phasespecI = numpy.random.normal(loc=0, scale=(numpy.pi*2.0 / 2.0), size=[self.ny, self.nx])
+        #self.phasespecI = numpy.random.normal(loc=0, scale=(numpy.pi*2.0 / 2.0), size=[self.ny, self.nx])
         # Wrap into -180 to 180 range
         self.phasespecI = (self.phasespecI-self.phasespecI.min()) % (numpy.pi*2.0) - (numpy.pi)
         return
