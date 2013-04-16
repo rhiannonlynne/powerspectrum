@@ -229,21 +229,26 @@ class PImagePlots(PImage):
         return
 
 
-    def showPsd1d(self, comparison=None):
+    def showPsd1d(self, comparison=None, linear=False):
         pylab.figure()
         pylab.subplot(121)
-        pylab.semilogy(self.rfreq, self.psd1d, 'b-')
+        pylab.plot(self.rfreq, self.psd1d, 'b-')
         if comparison != None:
-            pylab.semilogy(comparison.rfreq, comparison.psd1d, 'r-')
+            pylab.plot(comparison.rfreq, comparison.psd1d, 'r-')
+        pylab.yscale('log', subsy=[2,3,4,5,6,7,8,9])
+        if linear:
+            pylab.yscale('linear')
         pylab.xlabel('Frequency')
         pylab.ylabel('1-D Power Spectrum')
         pylab.subplot(122)
-        pylab.plot(self.rcenters, self.psd1d, 'b-', label='Image')
+        pylab.plot(self.psdx, self.psd1d, 'b-', label='Image')
         if comparison != None:
-            pylab.plot(comparison.rcenters, comparison.psd1d, 'r-', label='Comparison')
-        pylab.yscale('log')
+            pylab.plot(comparison.psdx, comparison.psd1d, 'r-', label='Comparison')
+        pylab.yscale('log', subsy=[2,3,4,5,6,7,8,9])
         pylab.xscale('log', subsx=[2,3,4,5,6,7,8,9])
-        #pylab.xscale('linear')
+        if linear:
+            pylab.xscale('linear')
+            pylab.yscale('linear')
         pylab.xlabel('Spatial scale (pix)')        
         pylab.grid()
         if comparison!=None:
@@ -365,7 +370,7 @@ class PImagePlots(PImage):
         pylab.plot(self.acfx[condition], self.acf1d[condition], 'b-', label='image')
         if comparison != None:
             pylab.plot(comparison.acfx[condition], comparison.acf1d[condition], 'r-', label='comparison')
-        pylab.yscale('log')
+        pylab.yscale('log', subsy=[2,3,4,5,6,7,8,9])
         #pylab.xscale('log', subsx=[2,3,4,5,6,7,8,9])
         pylab.xscale('linear')
         pylab.xlabel('Spatial Scale (pix)')
@@ -405,7 +410,7 @@ class PImagePlots(PImage):
         clims = cb.get_clim()
         pylab.title('Image', fontsize=12)
         #
-        ax2 = pylab.subplot2grid((2,3), (0,1))
+        ax2 = pylab.subplot2grid((2,3), (1,0))
         pylab.imshow(self.fimage.real, origin='lower', vmin=clims[0], vmax=clims[1],
                      extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
         pylab.xticks(rotation=45)
@@ -414,22 +419,14 @@ class PImagePlots(PImage):
         cb = pylab.colorbar(shrink=shrinkratio)
         pylab.title('Real FFT', fontsize=12)
         #
-        ax2 = pylab.subplot2grid((2,3), (0,2))
-        pylab.imshow(self.fimage.imag, origin='lower', vmin=clims[0], vmax=clims[1],
-                     extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
-        pylab.xticks(rotation=45)
-        pylab.xlabel('u')
-        pylab.ylabel('v')
-        cb = pylab.colorbar(shrink=shrinkratio)
-        pylab.title('Imag FFT', fontsize=12)
-        #
-        ax3 = pylab.subplot2grid((2,3), (1,0))
-        pylab.imshow(self.acf.real, origin='lower')
+        ax3 = pylab.subplot2grid((2,3), (0, 1))
+        pylab.imshow(self.acf.real, origin='lower',
+                     extent=[-self.xcen, self.nx-self.xcen, -self.ycen, self.ny-self.ycen])
         pylab.xticks(rotation=45)
         pylab.xlabel('X')
         pylab.ylabel('Y')
         cb = pylab.colorbar(shrink=shrinkratio)
-        pylab.title('ACF', fontsize=12)
+        pylab.title('2D ACF', fontsize=12)
         #
         ax4 = pylab.subplot2grid((2,3), (1,1))
         vmax = self.psd2d.max()
@@ -445,20 +442,21 @@ class PImagePlots(PImage):
         pylab.ylabel('v')
         pylab.title('2D PSD', fontsize=12)
         #
-        #ax5 = pylab.subplot2grid((2,3), (0,2), rowspan=2)
-        ax5 = pylab.subplot2grid((2,3), (1,2))
-        #maxscale_image = max((self.nx-self.padx*2.0), (self.ny-self.pady*2))*(2.0*numpy.pi)
-        maxscale_image = (numpy.sqrt((self.nx/2.0 - self.padx)**2 + (self.ny/2.0 - self.pady)**2))
-        condition = (self.rcenters <= maxscale_image)
-        #pylab.plot(self.rcenters[condition], self.psd1d[condition], 'k-')
-        pylab.plot(self.rcenters, self.psd1d, 'k-')
-        pylab.xscale('symlog', linthreshx=30)
-        pylab.yscale('log')
+        ax5 = pylab.subplot2grid((2,3),(0,2))
+        pylab.plot(self.acfx, self.acf1d, 'k-')
+        #pylab.xscale('linear')
+        pylab.xscale('log', subsx=[2,3,4,5,6,7,8,9])
+        pylab.yscale('log', subsy=[2,3,4,5,6,7,8,9])
         pylab.xticks(rotation=45)
-        pylab.xlabel('Spatial Scale (pix)')
-        pylab.title('1D PSD', fontsize=12)
-        #pylab.figtext(0.9, 0.4, 'Binsize\n =%.3f' %(self.psd_binsize), fontsize=10)
-        #ax5.set_position(0.77, 0.2, pos2[2]*1.2, pos2[3]*1.5]) 
+        pylab.title('1D ACF', fontsize=12)
+        #
+        ax6 = pylab.subplot2grid((2,3), (1,2))
+        pylab.plot(self.psdx, self.psd1d, 'k-')
+        pylab.yscale('log', subsy=[2,3,4,5,6,7,8,9])
+        pylab.xscale('log', subsx=[2,3,4,5,6,7,8,9])
+        #pylab.xticks(rotation=45)
+        #pylab.xlabel('Pix')
+        pylab.xlabel('1D PSD', fontsize=12)
         if title!=None:
             pylab.suptitle(title, fontsize=14)
         return

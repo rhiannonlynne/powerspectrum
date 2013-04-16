@@ -127,15 +127,15 @@ class PImage():
         # Calculate the value of the image in each radial bin (weighted by the # of pixels in each bin)
         rprof = numpy.histogram(rvals, bins=rbins, weights=dvals)[0]
         rprof = numpy.where(nvals>0, rprof/nvals, numpy.nan)
-        # Calculate the central radius values used in the histograms
+        # Calculate the central radius values used in the histograms (note this is still in frequency). 
         rcenters =  (rbins[1:] + rbins[:-1])/2.0
-        # Set the value of the 1d psd, and interpolate over any nans (where there were no pixels)
+        # And calculate the relevant frequencies (using self.xfreq/yfreq & the corresponding pixel values).
+        self.rfreq = rcenters * self.xfreqscale
+        # Set the value of the 1d psd, and interpolate over any nans (where there were no pixels).
         self.psd1d = numpy.interp(rcenters, rcenters[rprof==rprof], rprof[rprof==rprof])
         # Scale rcenters to 'original pixels' scale (ie. in the FFT space, pixels are scaled x_fft = 1/(x_pix*2pi)
         #   but must also account for overall size of image 
-        self.rcenters = 1/(rcenters*2.0*numpy.pi) * numpy.sqrt(self.nx*self.ny)
-        # And calculate the relevant frequencies (using self.xfreq/yfreq & the corresponding pixel values)
-        self.rfreq = rcenters * self.xfreqscale
+        self.psdx = 1/(rcenters*2.0*numpy.pi) * numpy.sqrt(self.nx*self.ny)
         return
 
     def calcAcf2d(self):

@@ -14,7 +14,7 @@ from pImagePlots import PImagePlots
 
 
 class TestImage(PImagePlots):
-    def __init__(self, nx=500, ny=500, shift=True):
+    def __init__(self, nx=1000, ny=1000, shift=True):
         """Initialize the test image, with an nx/ny size zero image."""
         # Note that numpy array translate to images in [y][x] order! 
         self.nx = int(nx)
