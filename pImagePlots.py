@@ -472,3 +472,116 @@ class PImagePlots(PImage):
         if title!=None:
             pylab.suptitle(title, fontsize=14)
         return
+
+
+    def _colorbarTicks(self, vmin, vmax, steps=4., log=False):
+        if not(log):
+            stepsize = (vmax-vmin)/float(steps)
+            ticks = numpy.arange(vmin, vmax+stepsize, stepsize)
+            ticks = ticks * 100.0
+            ticks = numpy.round(ticks)
+            ticks = ticks / 100.0
+        if log:
+            vmintmp = numpy.log10(vmin)
+            vmaxtmp = numpy.log10(vmax)
+            stepsize = (vmaxtmp - vmintmp)/float(steps)
+            ticks = numpy.arange(vmintmp, vmaxtmp+stepsize/2.0, stepsize)
+            ticks = numpy.floor(ticks)
+            ticks = 10**ticks
+        return ticks
+
+    def plotMore(self, title=None):
+        pylab.figure()        
+        pylab.subplots_adjust(left=0.1, right=0.95, bottom=0.1, wspace=0.45, hspace=0.45)
+        shrinkratio = 0.7
+        #
+        ax1 = pylab.subplot2grid((3,3),(0,0))
+        pylab.imshow(self.image, origin='lower')
+        pylab.xticks(rotation=45, fontsize='smaller')
+        pylab.yticks(fontsize='smaller')
+        pylab.ylabel('X / Y', fontsize='smaller')
+        clims = [self.image.min(), self.image.max()]
+        ticks = self._colorbarTicks(clims[0], clims[1])
+        cb = pylab.colorbar(shrink=shrinkratio, ticks=ticks)
+        pylab.title('Image', fontsize=12)
+        #
+        ax2 = pylab.subplot2grid((3,3), (0,1))
+        pylab.imshow(self.fimage.real, origin='lower', vmin=clims[0], vmax=clims[1],
+                     extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
+        pylab.xticks(rotation=45, fontsize='smaller')
+        pylab.yticks(fontsize='smaller')
+        pylab.ylabel('u / v', fontsize='smaller')
+        #ticks = self._colorbarTicks(clims[0], clims[1])
+        cb = pylab.colorbar(shrink=shrinkratio, ticks=ticks)
+        pylab.title('Real FFT', fontsize=12)
+        # 
+        ax3 = pylab.subplot2grid((3,3), (0,2))
+        pylab.imshow(self.fimage.imag, origin='lower', vmin=clims[0], vmax=clims[1],
+                     extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
+        pylab.xticks(rotation=45, fontsize='smaller')
+        pylab.yticks(fontsize='smaller')
+        pylab.ylabel('u / v', fontsize='smaller')
+        cb = pylab.colorbar(shrink=shrinkratio, ticks=ticks)
+        pylab.title('Imag FFT', fontsize=12)
+        #
+        ax4 = pylab.subplot2grid((3,3), (1,0))
+        pylab.imshow(self.phasespec, origin='lower', 
+                     extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
+        pylab.xticks(rotation=45, fontsize='smaller')
+        pylab.yticks(fontsize='smaller')
+        pylab.ylabel('u / v', fontsize='smaller')
+        ticks = self._colorbarTicks(-numpy.pi, numpy.pi)
+        cb = pylab.colorbar(shrink=shrinkratio, ticks=ticks)
+        pylab.title('Phase Spec.', fontsize=12)
+        # 
+        ax5 = pylab.subplot2grid((3,3), (1,1))
+        vmax = self.psd2d.max()
+        vmin = max(vmax - 10.e20, self.psd2d.min())
+        vmin = max(vmin, 0.0001)
+        norml = LogNorm(vmin=vmin, vmax=vmax)
+        pylab.imshow(self.psd2d, origin='lower', norm=norml, 
+                     extent=[self.xfreq.min(), self.xfreq.max(), self.yfreq.min(), self.yfreq.max()])
+        ticks = self._colorbarTicks(vmin, vmax, log=True)
+        cb = pylab.colorbar(shrink=shrinkratio, ticks=ticks)
+        pylab.xticks(rotation=45, fontsize='smaller')
+        pylab.yticks(fontsize='smaller')
+        pylab.ylabel('u / v', fontsize='smaller')
+        pylab.title('2D PSD', fontsize=12)
+        #
+        ax6 = pylab.subplot2grid((3,3), (1, 2))
+        pylab.imshow(self.acf.real, origin='lower',
+                     extent=[-self.xcen, self.nx-self.xcen, -self.ycen, self.ny-self.ycen])
+        pylab.xticks(rotation=45, fontsize='smaller')
+        pylab.yticks(fontsize='smaller')
+        pylab.ylabel('X / Y', fontsize='smaller')
+        ticks = self._colorbarTicks(0, self.acf.real.max())
+        cb = pylab.colorbar(shrink=shrinkratio, ticks=ticks, format='%.0e')
+        pylab.title('2D ACF', fontsize=12)
+        #
+        ax7 = pylab.subplot2grid((3,2), (2,0))
+        pylab.plot(self.rfreq, self.psd1d, 'k-')
+        pylab.yscale('log')#, subsy=[2,3,4,5,6,7,8,9])
+        pylab.xscale('linear')
+        pylab.xticks(rotation=45)
+        ylim = pylab.ylim()
+        ticks = self._colorbarTicks(ylim[0], ylim[1], log=True)
+        pylab.yticks(ticks)
+        pylab.grid()
+        pylab.xlabel('u')
+        pylab.ylabel('1D PSD', fontsize=12)
+        #
+        ax8 = pylab.subplot2grid((3,2),(2,1))
+        pylab.plot(self.acfx, self.acf1d, 'k-')
+        #pylab.xscale('linear')
+        pylab.xscale('log', subsx=[2,3,4,5,6,7,8,9])
+        pylab.yscale('log')#, subsy=[2,3,4,5,6,7,8,9])
+        #pylab.xticks(rotation=45)
+        ylim = pylab.ylim()
+        ticks = self._colorbarTicks(ylim[0], ylim[1], log=True)
+        pylab.yticks(ticks)
+        pylab.grid()
+        pylab.xlabel('X')
+        pylab.ylabel('1D ACF', fontsize=12)
+        if title!=None:
+            pylab.suptitle(title, fontsize=14)
+        return
