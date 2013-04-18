@@ -40,8 +40,9 @@ cloudim = zpad(oldCLouds.copy())
 
 ack.setImage(cloudim)
 
-ack.makeFft()
-ack.makePsd()
+ack.calcFft()
+ack.calcPsd2d()
+ack.calcPsd1d()
 
 figure()
 subplot(2,2,1)
@@ -65,8 +66,9 @@ clf()
 
 cloudim = zpad(newClouds.copy())
 ack.setImage(cloudim)
-ack.makeFft()
-ack.makePsd()
+ack.calcFft()
+ack.calcPsd2d()
+ack.calcPsd1d()
 
 figure()
 subplot(2,2,1)
@@ -93,7 +95,7 @@ yy = ack.yy.copy()
 
 im = t.TestImage()
 
-scales = np.array([5,10,500.])
+scales = np.array([5.,10.,500.])
 
 for i in np.arange(np.size(scales)):
 
@@ -101,8 +103,9 @@ for i in np.arange(np.size(scales)):
     imsin = np.sin(2.*np.pi/scale*xx)#*im.xx**2.
     imss = imsin*np.sin(2.*np.pi/scale*yy)
     im.setImage(zpad(imss))
-    im.makeFft()
-    im.makePsd()
+    im.calcFft()
+    im.calcPsd2d()
+    im.calcPsd1d()
     myplot(im)
     ylim([1e-5,1e7])
     savefig('sin_ps%d.png'%scale, type='png')

@@ -33,3 +33,9 @@ nosetests.xml
 .mr.developer.cfg
 .project
 .pydevproject
+
+pImage_o.py
+
+powers_qs.log
+
+powers_qs.aux

@@ -2,10 +2,18 @@ import numpy
 from scipy import fftpack
 
 class PImage():
-    def __init__(self, shift=True):
+    def __init__(self, shift=True, nx=1000, ny=1000):
         """Init. Does nothing."""
         # Note that numpy array translate to images in [y][x] order!
         self.shift = shift
+        self.nx = nx
+        self.ny = ny
+        self.xcen = round(self.nx/2.0)
+        self.ycen = round(self.ny/2.0)
+        self.image = numpy.zeros([self.ny, self.nx], 'float')
+        self.padx = 0.0
+        self.pady = 0.0
+        self.yy, self.xx = numpy.indices(self.image.shape)
         return
 
     def setImage(self, imdat, copy=False):
@@ -52,8 +60,9 @@ class PImage():
         if rmax==None:
             rmax = min(self.nx, self.ny) / 2.0
         rvals = numpy.hypot((self.xx-self.xcen), (self.yy-self.ycen)) 
-        hanning = numpy.where(rvals<=rmax, (0.5-0.5*numpy.cos(numpy.pi*(1-rvals/rmax))), 0.0)
-        self.image *= hanning
+        self.hanning = numpy.where(rvals<=rmax, (0.5-0.5*numpy.cos(numpy.pi*(1-rvals/rmax))), 0.0)
+        self.image *= self.hanning
+        self.hanningFilter = True
         return
         
     def calcFft(self):
@@ -96,7 +105,7 @@ class PImage():
         """Calculate the 1-D power spectrum. The 'tricky' part here is determining spatial scaling.
         At least npix pixels will be included in each radial bin, in frequency space, and the minimum
         spacing between bins will be minthresh pixels. This means the 'central' bins (large pixel scales)
-        will have larger steps in the 1dPSD. """
+        could have larger steps in the 1dPSD. """
         # Calculate 1d power spectrum                
         #  - uses shifted PSD so that can create radial bins from center, with largest scales at center.
         # Calculate all the radius values for all pixels. These are still in frequency space. 
@@ -203,7 +212,9 @@ class PImage():
         self.calcSf()
         return
 
-    def _makeRandomPhases(self):
+    def _makeRandomPhases(self, seed=None):
+        if seed != None:
+            numpy.random.seed(seed)
         # Generate random phases (uniform -360 to 360)
         self.phasespecI = numpy.random.uniform(low=-numpy.pi, high=numpy.pi, size=[self.ny, self.nx])
         # Generate random phases with gaussian distribution around 0
@@ -229,7 +240,7 @@ class PImage():
             self.imageI = self.imageI.real
         return
 
-    def invertPsd2d(self, useI=False):
+    def invertPsd2d(self, useI=False, usePhasespec=True, seed=None):
         """Convert the 2d PSD and phase spec into an FFT image (FftI). """
         # The PHASEs of the FFT are encoded in the phasespec ('where things are')
         # The AMPLITUDE of the FFT is encoded in the PSD ('how bright things are' .. also radial scale)
@@ -245,6 +256,10 @@ class PImage():
             amp = numpy.sqrt(fftpack.ifftshift(psd2d))
         else:
             amp = numpy.sqrt(psd2d)
+        # Can override using own phasespec for random (if coming in here to use 2d PSD for image)
+        if not(usePhasespec):
+            self._makeRandomPhases(seed=seed)
+            phasespec = self.phasespecI
         # Shift doesn't matter for phases, because 'unshifted' it above, before calculating phase.
         x = numpy.cos(phasespec) * amp
         y = numpy.sin(phasespec) * amp
@@ -253,7 +268,7 @@ class PImage():
             self.fimageI = fftpack.fftshift(self.fimageI)
         return
     
-    def invertPsd1d(self, amp1d=None, phasespec=None):
+    def invertPsd1d(self, amp1d=None, phasespec=None, seed=None):
         """Convert a 1d PSD, generate a phase spectrum (or use user-supplied values) into a 2d PSD (psd2dI)."""
         # Converting the 2d PSD into a 1d PSD is a lossy process, and then there is additional randomness
         #  added when the phase spectrum is not the same as the original phase spectrum, so this may or may not
@@ -273,7 +288,7 @@ class PImage():
         self.psd2dI = numpy.interp(rad.flatten(), xrange, amp1d)
         self.psd2dI = self.psd2dI.reshape(self.ny, self.nx)
         if phasespec == None:
-            self._makeRandomPhases()
+            self._makeRandomPhases(seed=seed)
         else:
             self.phasespecI = phasespec
         if not(self.shift):
@@ -281,13 +296,16 @@ class PImage():
             self.psd2dI = fftpack.ifftshift(self.psd2dI)
         return
 
-    def invertAcf2d(self, useI=False):
+    def invertAcf2d(self, useI=False, usePhasespec=True, seed=None):
         """Convert the 2d ACF into a 2d PSD (psd2dI). """
         if useI:
             acf = self.acfI
         else:
             acf = self.acf
             self.phasespecI = self.phasespec
+        # Let user override phasespec if want to use real 2d ACF but random phases.
+        if not(usePhasespec):
+            self._makeRandomPhases(seed=seed) 
         # Calculate the 2dPSD from the ACF. 
         if self.shift:
             self.psd2dI = fftpack.ifftshift(fftpack.fft2(fftpack.fftshift(acf)))
@@ -300,7 +318,7 @@ class PImage():
         self.psd2dI = numpy.sqrt(numpy.abs(self.psd2dI)**2)
         return
 
-    def invertAcf1d(self, amp1d=None, phasespec=None):
+    def invertAcf1d(self, amp1d=None, phasespec=None, seed=None):
         """Convert a 1d ACF into a 2d ACF (acfI). """
         # 'Swing' the 1d ACF across the whole fov.         
         if amp1d == None:
@@ -317,7 +335,7 @@ class PImage():
         self.acfI = numpy.interp(rad.flatten(), xrange, amp1d)
         self.acfI = self.acfI.reshape(self.ny, self.nx)
         if phasespec == None:
-            self._makeRandomPhases()
+            self._makeRandomPhases(seed=seed)
         else:
             self.phasespecI = phasespec
         if not(self.shift):

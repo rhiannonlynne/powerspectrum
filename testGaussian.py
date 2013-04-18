@@ -45,7 +45,7 @@ sigma_x = 5.0
 gauss = ti.TestImage(shift=True, nx = size, ny=size)
 gauss.addGaussian(xwidth=sigma_x, ywidth=sigma_x, value=1.0) 
 gauss.zeroPad()
-#gauss.hanningFilter()
+#gauss.hanningFilter()  # not really necessary for a gaussian which doesn't touch the edges of the image.
 # and calculate FFT/PSD2d/PSD1d/ACF2d/ACF1d.
 gauss.calcAll(min_npix=2, min_dr=1.0)
 

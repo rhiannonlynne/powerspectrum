@@ -3,12 +3,13 @@ from testImage import TestImage
 
 # Plain image, with noise
 im = TestImage()
-im.addEllipseRandom(value=3)
-im.addNoise()
+im.addLines(width=10, spacing=50, value=5)
+#im.addNoise()
 im.hanningFilter()
 im.zeroPad()
 im.calcAll()
-im.plotAll(title='Gaussian Noise')
+#im.plotAll(title='Gaussian Noise')
+im.plotMore(title='Gaussian Noise')
 pylab.show()
 exit()
 

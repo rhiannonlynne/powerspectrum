@@ -48,7 +48,7 @@ class PImagePlots(PImage):
             raise Exception('Source must be one of image/fft/psd/acf')
         return
 
-    def showImage(self, xlim=None, ylim=None, clims=None):
+    def showImage(self, xlim=None, ylim=None, clims=None, cmap=None):
         pylab.figure()
         pylab.title('Image')
         if xlim == None:
@@ -64,9 +64,9 @@ class PImagePlots(PImage):
             y0 = ylim[0]
             y1 = ylim[1]
         if clims == None:
-            pylab.imshow(self.image, origin='lower')
+            pylab.imshow(self.image, origin='lower', cmap=cmap)
         else:
-            pylab.imshow(self.image, origin='lower', vmin=clims[0], vmax=clims[1])
+            pylab.imshow(self.image, origin='lower', vmin=clims[0], vmax=clims[1], cmap=cmap)
         pylab.xlabel('X')
         pylab.ylabel('Y')
         cb = pylab.colorbar()
@@ -75,7 +75,7 @@ class PImagePlots(PImage):
         pylab.ylim(y0, y1)
         return clims
 
-    def showImageI(self, xlim=None, ylim=None, clims=None):
+    def showImageI(self, xlim=None, ylim=None, clims=None, cmap=None):
         pylab.figure()
         pylab.title('Reconstructed Image')
         if xlim == None:
@@ -91,9 +91,9 @@ class PImagePlots(PImage):
             y0 = ylim[0]
             y1 = ylim[1]
         if clims == None:
-            pylab.imshow(self.imageI.real, origin='lower')
+            pylab.imshow(self.imageI.real, origin='lower', cmap=cmap)
         else:
-            pylab.imshow(self.imageI.real, origin='lower', vmin=clims[0], vmax=clims[1])
+            pylab.imshow(self.imageI.real, origin='lower', vmin=clims[0], vmax=clims[1], cmap=cmap)
         pylab.xlabel('X')
         pylab.ylabel('Y')
         cb = pylab.colorbar()
@@ -101,6 +101,29 @@ class PImagePlots(PImage):
         pylab.ylim(y0, y1)
         return
 
+    def showImageAndImageI(self, clims=None, climsI=None, title=None):
+        shrinkratio=0.6
+        pylab.figure()
+        if title!=None:
+            pylab.suptitle(title)
+        pylab.subplot(121)
+        pylab.title('Image')
+        if clims == None:
+            pylab.imshow(self.image, origin='lower')
+        else:
+            pylab.imshow(self.image, origin='lower', vmin=clims[0], vmax=clims[1])
+        pylab.colorbar(shrink=shrinkratio)
+        pylab.xticks(rotation=45)
+        pylab.subplot(122)
+        pylab.title('Reconstructed image')
+        if climsI == None:
+            pylab.imshow(self.imageI.real, origin='lower')
+        else:
+            pylab.imshow(self.imageI.real, origin='lower', vmin=climsI[0], vmax=climsI[1])
+        pylab.colorbar(shrink=shrinkratio)
+        pylab.xticks(rotation=45)
+        return
+        
     def showFft(self, real=True, imag=True, clims=None, log=False):
         if ((real == True) & (imag==True)):
             p = 2
@@ -241,26 +264,43 @@ class PImagePlots(PImage):
         return
 
 
-    def showPsd1d(self, comparison=None, linear=False):
+    def showPsd1d(self, comparison=None, linear=False, legendlabels=['Image', 'Comparison']):
         pylab.figure()
+        # limit y scale
+        ymax = self.psd1d.max()
+        if comparison != None:
+            ymax = max(ymax, comparison.psd1d.max())
+        ymin = max(ymax - 10e15, self.psd1d.min())
+        if comparison != None:
+            ymin = min(self.psd1d.min(), comparison.psd1d.min())
+            ymin = max(ymax - 10e15, ymin)            
+        ymin = max(ymin, 1e-12)
+        xmax = max(self.xcen, self.ycen) - min(self.padx, self.pady)
+        xmin = 0.5
+        pylab.subplots_adjust(left=0.15, right=0.9, wspace=0.35, hspace=0.2)
         pylab.subplot(121)
         pylab.plot(self.rfreq, self.psd1d, 'b-')
         if comparison != None:
-            pylab.plot(comparison.rfreq, comparison.psd1d, 'r-')
+            pylab.plot(comparison.rfreq, comparison.psd1d, 'r-')            
+        pylab.ylim(ymin, ymax)
         pylab.yscale('log', subsy=[2,3,4,5,6,7,8,9])
         if linear:
             pylab.yscale('linear')
+        pylab.yticks(fontsize='smaller')
         pylab.xlabel('Frequency')
         pylab.ylabel('1-D Power Spectrum')
         pylab.subplot(122)
-        pylab.plot(self.psdx, self.psd1d, 'b-', label='Image')
+        pylab.plot(self.psdx, self.psd1d, 'b-', label=legendlabels[0])
         if comparison != None:
-            pylab.plot(comparison.psdx, comparison.psd1d, 'r-', label='Comparison')
+            pylab.plot(comparison.psdx, comparison.psd1d, 'r-', label=legendlabels[1])
+        pylab.xlim(xmin, xmax)
+        pylab.ylim(ymin, ymax)
         pylab.yscale('log', subsy=[2,3,4,5,6,7,8,9])
         pylab.xscale('log', subsx=[2,3,4,5,6,7,8,9])
         if linear:
             pylab.xscale('linear')
             pylab.yscale('linear')
+        pylab.yticks(fontsize='smaller')
         pylab.xlabel('Spatial scale (pix)')        
         pylab.grid()
         if comparison!=None:
@@ -374,15 +414,18 @@ class PImagePlots(PImage):
             cb = pylab.colorbar(shrink=shrinkratio)
         return
 
-    def showAcf1d(self, comparison=None):        
+    def showAcf1d(self, linear=False, comparison=None, legendlabels=['Image', 'Comparison']):        
         pylab.figure()
         pylab.title('1D ACF: min_npix %.0f, min_dr %.2f' %(self.min_npix, self.min_dr))
         maxscale_image = (numpy.sqrt((self.nx/2.0 - self.padx)**2 + (self.ny/2.0 - self.pady)**2))
         condition = (self.acfx <= maxscale_image)
-        pylab.plot(self.acfx[condition], self.acf1d[condition], 'b-', label='image')
+        pylab.plot(self.acfx[condition], self.acf1d[condition], 'b-', label=legendlabels[0])
         if comparison != None:
-            pylab.plot(comparison.acfx[condition], comparison.acf1d[condition], 'r-', label='comparison')
-        pylab.yscale('log', subsy=[2,3,4,5,6,7,8,9])
+            pylab.plot(comparison.acfx[condition], comparison.acf1d[condition], 'r-', label=legendlabels[1])
+        if linear:
+            pylab.yscale('linear')
+        else:
+            pylab.yscale('log', subsy=[2,3,4,5,6,7,8,9])
         #pylab.xscale('log', subsx=[2,3,4,5,6,7,8,9])
         pylab.xscale('linear')
         pylab.xlabel('Spatial Scale (pix)')
@@ -392,17 +435,20 @@ class PImagePlots(PImage):
             pylab.legend(numpoints=1, fancybox=True, loc='upper right', fontsize='smaller')
         return
 
-    def showSf(self, comparison=None):        
+    def showSf(self, linear=False, comparison=None, legendlabels=['Image', 'Comparison']):        
         pylab.figure()
-        pylab.title('1D SF: min_npix %.0f, min_dr %.2f' %(self.min_npix, self.min_dr))
-        pylab.plot(self.sfx, self.sf, 'b-', label='image')
+        pylab.title('1-d SF: min_npix %.0f, min_dr %.2f' %(self.min_npix, self.min_dr))
+        pylab.plot(self.sfx, self.sf, 'b-', label=legendlabels[0])
         if comparison != None:
-            pylab.plot(comparison.sfx, comparison.sf, 'r-', label='comparison')
-        pylab.yscale('log')
+            pylab.plot(comparison.sfx, comparison.sf, 'r-', label=legendlabels[1])
+        if linear:
+            pylab.yscale('linear')
+        else:
+            pylab.yscale('log', subsy=[2,3,4,5,6,7,8,9])
         #pylab.xscale('log', subsx=[2,3,4,5,6,7,8,9])
         pylab.xscale('linear')
         pylab.xlabel('Spatial Scale (pix)')
-        pylab.ylabel('1d SF')
+        pylab.ylabel('1-d SF')
         pylab.grid()
         if comparison!=None:
             pylab.legend(numpoints=1, fancybox=True, loc='lower right', fontsize='smaller')
@@ -577,7 +623,17 @@ class PImagePlots(PImage):
         pylab.yscale('log')#, subsy=[2,3,4,5,6,7,8,9])
         #pylab.xticks(rotation=45)
         ylim = pylab.ylim()
-        ticks = self._colorbarTicks(ylim[0], ylim[1], log=True)
+        try:
+            self.hanningFilter = True
+            vmin  = self.acf1d[self.acfx > (self.acfx.max()*4./5.)].mean() 
+            vmin = max(vmin, ylim[0])
+        except AttributeError:
+            vmin = ylim[0]
+        ticks = self._colorbarTicks(vmin, ylim[1], log=True)
+        xmax = max(self.xcen, self.ycen) - min(self.padx, self.pady)
+        xmin = 0.5
+        pylab.xlim(xmin, xmax)
+        pylab.ylim(vmin, ylim[1])
         pylab.yticks(ticks)
         pylab.grid()
         pylab.xlabel('X')
