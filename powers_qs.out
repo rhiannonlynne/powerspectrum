@@ -1,7 +1,7 @@
-\BOOKMARK [1][-]{section.1}{Code to calculate and invert the FFT/PSD/ACF and 1-D PSD/ACF}{}% 1
-\BOOKMARK [2][-]{subsection.1.1}{Forward calculation of the FFT, PSD, ACF and 1-d PSD and ACF}{section.1}% 2
+\BOOKMARK [1][-]{section.1}{Code to calculate and invert the FFT/PSD/ACovF and 1-D PSD/ACovF}{}% 1
+\BOOKMARK [2][-]{subsection.1.1}{Forward calculation of the FFT, PSD, ACovF and 1-d PSD and ACovF}{section.1}% 2
 \BOOKMARK [2][-]{subsection.1.2}{Gaussian example}{section.1}% 3
-\BOOKMARK [1][-]{section.2}{Inverting the FFT, PSD or ACF to reconstruct an image}{}% 4
+\BOOKMARK [1][-]{section.2}{Inverting the FFT, PSD, ACovF or SF to reconstruct an image}{}% 4
 \BOOKMARK [1][-]{section.3}{More simple images}{}% 5
 \BOOKMARK [1][-]{section.4}{Cloud Images}{}% 6
 \BOOKMARK [1][-]{section.5}{Outstanding Questions}{}% 7

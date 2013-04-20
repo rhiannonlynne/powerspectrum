@@ -13,13 +13,14 @@ do_example_lines =  True
 do_example_lines =  False
 do_gaussian_example = True
 do_gaussian_example = False
-do_compare1d_psd_acf = True
-do_compare1d_psd_acf = False
+do_compare1d_psd_acovf = True
+do_compare1d_psd_acovf = False
 do_inversion = True
 do_inversion = False
 do_elliptical = True
 do_elliptical = False
 do_clouds = True
+#do_clouds = False
 
 # opening example
 def example_lines():
@@ -62,6 +63,7 @@ def doplot(x, d, fitval, expval, title, xlabel='Pixels'):
     pylab.legend(numpoints=1, fancybox=True, fontsize='small')
     pylab.xlabel(xlabel)
     pylab.title(title)
+    pylab.close()
     return
 
 # gaussian example
@@ -124,27 +126,27 @@ def gaussian_example():
     fitval, expval = dofit(x, d, 0., sigma) 
     doplot(x, d, fitval, expval, 'PSD 1-d', xlabel='Frequency')
     pylab.savefig('gauss_psd1d.%s' %(figformat), format='%s' %(figformat))
-    # pull slice from ACF
+    # pull slice from ACovF
     x = numpy.arange(-gauss.xcen, gauss.nx-gauss.xcen, 1.)
-    d = gauss.acf.real[round(gauss.ny/2.0)][:]
+    d = gauss.acovf.real[round(gauss.ny/2.0)][:]
     mean = 0
-    sigma_acf = sigma_x*numpy.sqrt(2)
-    fitval, expval = dofit(x, d, mean, sigma_acf)
-    doplot(x, d, fitval, expval, 'ACF 2-d slice', xlabel='Pixels')
+    sigma_acovf = sigma_x*numpy.sqrt(2)
+    fitval, expval = dofit(x, d, mean, sigma_acovf)
+    doplot(x, d, fitval, expval, 'ACovF 2-d slice', xlabel='Pixels')
     pylab.xlim(-200, 200)
-    pylab.savefig('gauss_acf.%s' %(figformat), format='%s' %(figformat))
-    # and check 1d ACF
-    x = gauss.acfx
-    d = gauss.acf1d.real
-    sigma_acf = sigma_x*numpy.sqrt(2)
-    fitval, expval = dofit(x, d, mean, sigma_acf)
-    doplot(x, d, fitval, expval, 'ACF 1-d', xlabel='Pixels')
-    pylab.savefig('gauss_acf1d.%s' %(figformat), format='%s' %(figformat))
+    pylab.savefig('gauss_acovf.%s' %(figformat), format='%s' %(figformat))
+    # and check 1d ACovF
+    x = gauss.acovfx
+    d = gauss.acovf1d.real
+    sigma_acovf = sigma_x*numpy.sqrt(2)
+    fitval, expval = dofit(x, d, mean, sigma_acovf)
+    doplot(x, d, fitval, expval, 'ACovF 1-d', xlabel='Pixels')
+    pylab.savefig('gauss_acovf1d.%s' %(figformat), format='%s' %(figformat))
     pylab.close()
     return
 
-def compare1d_psd_acf():
-    """Compare 1d ACF in physical coordinates to 1d PSD in physical coordinates, for two similar but different images."""
+def compare1d_psd_acovf():
+    """Compare 1d ACovF in physical coordinates to 1d PSD in physical coordinates, for two similar but different images."""
     im = TestImage(shift=True, nx=1000, ny=1000)
     scale = 100
     im.addSin(scale=scale)
@@ -158,8 +160,8 @@ def compare1d_psd_acf():
     pylab.savefig('compare1d_psd2d1.%s' %(figformat), format='%s' %(figformat))
     im.showPsd1d()
     pylab.savefig('compare1d_psd1.%s' %(figformat), format='%s' %(figformat))
-    im.showAcf1d()
-    pylab.savefig('compare1d_acf1.%s' %(figformat), format='%s' %(figformat))
+    im.showAcovf1d()
+    pylab.savefig('compare1d_acovf1.%s' %(figformat), format='%s' %(figformat))
     im = TestImage(shift=True, nx=1000, ny=1000)
     im.addSin(scale=scale*2)
     im.hanningFilter()
@@ -172,8 +174,8 @@ def compare1d_psd_acf():
     pylab.savefig('compare1d_psd2d2.%s' %(figformat), format='%s' %(figformat))
     im.showPsd1d()
     pylab.savefig('compare1d_psd2.%s' %(figformat), format='%s' %(figformat))
-    im.showAcf1d()
-    pylab.savefig('compare1d_acf2.%s' %(figformat), format='%s' %(figformat))
+    im.showAcovf1d()
+    pylab.savefig('compare1d_acovf2.%s' %(figformat), format='%s' %(figformat))
     pylab.close()
     return
 
@@ -190,41 +192,41 @@ def inversion():
     clims = im.showImage(cmap=cmap)
     pylab.savefig('invert_image.%s' %(figformat), format='%s' %(figformat))
     im.calcAll(min_npix=1, min_dr=1)
-    # Invert from ACF and show perfect reconstruction.
-    im.invertAcf2d()
+    # Invert from ACovF and show perfect reconstruction.
+    im.invertAcovf2d()
     im.invertPsd2d(useI=True)
     im.invertFft(useI=True)
     im.showImageI(clims=clims, cmap=cmap)
-    pylab.savefig('invert_acf2d_good.%s' %(figformat), format='%s' %(figformat))
-    # Invert from ACF 2d without phases
-    im.invertAcf2d(usePhasespec=False, seed=42)
+    pylab.savefig('invert_acovf2d_good.%s' %(figformat), format='%s' %(figformat))
+    # Invert from ACovF 2d without phases
+    im.invertAcovf2d(usePhasespec=False, seed=42)
     im.invertPsd2d(useI=True)
     im.invertFft(useI=True)    
     im.showImageI(clims=clims, cmap=cmap)
-    pylab.savefig('invert_acf2d_nophases.%s' %(figformat), format='%s' %(figformat))
-    # Invert from ACF 1d with phases
-    im.invertAcf1d(phasespec=im.phasespec)
-    im.invertAcf2d(useI=True)
+    pylab.savefig('invert_acovf2d_nophases.%s' %(figformat), format='%s' %(figformat))
+    # Invert from ACovF 1d with phases
+    im.invertAcovf1d(phasespec=im.phasespec)
+    im.invertAcovf2d(useI=True)
     im.invertPsd2d(useI=True)
     im.invertFft(useI=True)
     im.showImageI(clims=clims, cmap=cmap)
-    pylab.savefig('invert_acf1d_phases.%s' %(figformat), format='%s' %(figformat))
-    # Invert from ACF 1d without phases
-    im.invertAcf1d(seed=42)
-    im.invertAcf2d(useI=True)
+    pylab.savefig('invert_acovf1d_phases.%s' %(figformat), format='%s' %(figformat))
+    # Invert from ACovF 1d without phases
+    im.invertAcovf1d(seed=42)
+    im.invertAcovf2d(useI=True)
     im.invertPsd2d(useI=True)
     im.invertFft(useI=True)
     im.showImageI(clims=clims, cmap=cmap)
-    pylab.savefig('invert_acf1d_nophases.%s' %(figformat), format='%s' %(figformat))
-    # Recalculate 1-d PSD and ACF from this last reconstructed image (ACF1d no phases)
+    pylab.savefig('invert_acovf1d_nophases.%s' %(figformat), format='%s' %(figformat))
+    # Recalculate 1-d PSD and ACovF from this last reconstructed image (ACovF1d no phases)
     im2 = PImagePlots()
     im2.setImage(im.imageI)
     im2.calcAll(min_npix=1, min_dr=1)
     legendlabels=['Reconstructed', 'Original']
     im2.showPsd1d(comparison=im, legendlabels=legendlabels)
-    pylab.savefig('invert_recalc_ACF_Psd1d.%s' %(figformat), format='%s' %(figformat))
-    im2.showAcf1d(comparison=im, legendlabels=legendlabels)
-    pylab.savefig('invert_recalc_ACF_Acf1d.%s' %(figformat), format='%s' %(figformat))
+    pylab.savefig('invert_recalc_ACovF_Psd1d.%s' %(figformat), format='%s' %(figformat))
+    im2.showAcovf1d(comparison=im, legendlabels=legendlabels)
+    pylab.savefig('invert_recalc_ACovF_Acovf1d.%s' %(figformat), format='%s' %(figformat))
     # Invert from PSD and show perfect reconstruction.                          
     im.invertPsd2d()
     im.invertFft(useI=True)
@@ -247,14 +249,14 @@ def inversion():
     im.invertFft(useI=True)
     im.showImageI(clims=clims, cmap=cmap)
     pylab.savefig('invert_psd1d_nophases.%s' %(figformat), format='%s' %(figformat))
-    # Recalculate 1-d PSD and ACF from this last reconstructed image (PSD1d no phases)
+    # Recalculate 1-d PSD and ACovF from this last reconstructed image (PSD1d no phases)
     im2 = PImagePlots()
     im2.setImage(im.imageI)
     im2.calcAll(min_npix=1, min_dr=1)
     im2.showPsd1d(comparison=im, legendlabels=legendlabels)
     pylab.savefig('invert_recalc_PSD_Psd1d.%s' %(figformat), format='%s' %(figformat))
-    im2.showAcf1d(comparison=im, legendlabels=legendlabels)
-    pylab.savefig('invert_recalc_PSD_Acf1d.%s' %(figformat), format='%s' %(figformat))
+    im2.showAcovf1d(comparison=im, legendlabels=legendlabels)
+    pylab.savefig('invert_recalc_PSD_Acovf1d.%s' %(figformat), format='%s' %(figformat))
     pylab.close()
     return
     
@@ -269,9 +271,9 @@ def elliptical():
     im.calcAll(min_npix=2, min_dr=1)
     im.plotMore()
     pylab.savefig('elliptical.%s' %(figformat), format='%s' %(figformat))
-    # Invert from ACF 1d without phases                                             
-    im.invertAcf1d()
-    im.invertAcf2d(useI=True)
+    # Invert from ACovF 1d without phases                                             
+    im.invertAcovf1d()
+    im.invertAcovf2d(useI=True)
     im.invertPsd2d(useI=True)
     im.invertFft(useI=True)
     im.showImageAndImageI()
@@ -293,7 +295,7 @@ def clouds():
     im.setImage(oldClouds)
     im.showImage()
     pylab.savefig('clouds_oldimage.%s' %(figformat), format='%s' %(figformat))
-    im.hanningFilter()
+    #im.hanningFilter()
     im.calcAll(min_npix=2, min_dr=1)
     im.plotMore()
     pylab.savefig('clouds_old.%s' %(figformat), format='%s' %(figformat))    
@@ -303,16 +305,22 @@ def clouds():
     im2.setImage(newClouds)
     im2.showImage()
     pylab.savefig('clouds_newimage.%s' %(figformat), format='%s' %(figformat))
-    im2.hanningFilter()
+    #im2.hanningFilter()
     im2.calcAll(min_npix=2, min_dr=1)
     im2.plotMore()
     pylab.savefig('clouds_new.%s' %(figformat), format='%s' %(figformat))
     # compare structure functions
-    legendlabels=['Old clouds', 'New clouds']
-    # translate x axis from pixels to degrees .. 240 pix = 3.0 deg (?)
+    # translate x axis from pixels to degrees .. 240 pix = 4.0 deg (?)
     im.sfx = im.sfx *pixscale
     im2.sfx = im2.sfx *pixscale
+    # and scale SF's to just run between 0 and 1 (because of loss of amplitude info with random phases)
+    im.sf = im.sf / im.sf.max()
+    im2.sf = im2.sf / im2.sf.max()
+    legendlabels = ['Old clouds (scaled SF)', 'New clouds (scaled SF)']
     im.showSf(comparison=im2, legendlabels=legendlabels, linear=True)
+    pylab.xlim(0, fov/2.0)
+    pylab.ylim(0, 1.2)
+    pylab.title('Structure Function')
     pylab.xlabel('Degrees')
     pylab.savefig('clouds_sf.%s' %(figformat), format='%s' %(figformat))
     # look at phase spectrum
@@ -330,12 +338,12 @@ def clouds():
     pylab.imshow(im.phasespec, origin='lower')
     pylab.colorbar(shrink=0.6)
     pylab.subplot(122)
-    pylab.title('New clouds')
+    pylab.title('New clouds')    
     pylab.imshow(im2.phasespec, origin='lower')
     pylab.colorbar(shrink=0.6)
     pylab.suptitle('Phase spectrum')
     pylab.savefig('clouds_phasespec.%s' %(figformat), format='%s' %(figformat))
-    pylab.show()
+    pylab.close()
     return
 
 
@@ -344,8 +352,8 @@ if __name__ == '__main__':
         example_lines()
     if do_gaussian_example:
         gaussian_example()
-    if do_compare1d_psd_acf:
-        compare1d_psd_acf()
+    if do_compare1d_psd_acovf:
+        compare1d_psd_acovf()
     if do_inversion:
         inversion()
     if do_elliptical:

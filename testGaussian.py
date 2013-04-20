@@ -1,13 +1,13 @@
-# Run a test to evaluate parameters of 2d gaussian through FFT/PSD/ACF. 
+# Run a test to evaluate parameters of 2d gaussian through FFT/PSD/ACovF. 
 # This is useful, because a Gaussian should be analytically predictable through each of these transformations. 
 # Summary: 
 # The FFT of a gaussian is a Gaussian, with sigma_fft (in frequency space) = 1/(2*pi*sigma_x). 
 #  Note that a gaussian also translates to a real-only FFT (imaginary part = 0), if using analytic, perfect transform. 
 # Then the 2d PSD is created by squaring the (real+imaginary) FFT - and a gaussian squared is a gaussian with sigma 
 #   divided by sqrt 2. So the sigma_psd2d = sigma_fft / sqrt(2) (note this is still in frequency). 
-# The 2d ACF is calculated by taking the FFT of the PSD, thus translating back to spatial coordinates .. so 
-#  sigma_acf = 1/(2*pi*sigma_psd2d) = 1/(2*pi*sigma_FFT)*sqrt(2) = sigma_x*sqrt(2)
-# Looking at the 1d version of the ACF, we should still find a gaussian with same sigma, and same for 1d PSD in frequency.
+# The 2d ACovF is calculated by taking the FFT of the PSD, thus translating back to spatial coordinates .. so 
+#  sigma_acovf = 1/(2*pi*sigma_psd2d) = 1/(2*pi*sigma_FFT)*sqrt(2) = sigma_x*sqrt(2)
+# Looking at the 1d version of the ACovF, we should still find a gaussian with same sigma, and same for 1d PSD in frequency.
 #  But, if we want to translate the PSD into 'spatial' scales related to pixels, we can look at the width of the gaussian
 #  and try to translate that to pixel scales. The result is that sigma_psd(pix) = sqrt(nx*ny)/(sigma_psd(freq)*2*pi)
 
@@ -46,12 +46,12 @@ gauss = ti.TestImage(shift=True, nx = size, ny=size)
 gauss.addGaussian(xwidth=sigma_x, ywidth=sigma_x, value=1.0) 
 gauss.zeroPad()
 #gauss.hanningFilter()  # not really necessary for a gaussian which doesn't touch the edges of the image.
-# and calculate FFT/PSD2d/PSD1d/ACF2d/ACF1d.
+# and calculate FFT/PSD2d/PSD1d/ACovF2d/ACovF1d.
 gauss.calcAll(min_npix=2, min_dr=1.0)
 
 print 'Using image size of %.0f (but with zeroPadding to get to %.0f) and sigma of %.2f' %(size, gauss.nx, sigma_x)
 
-# Step 2 - analyze the width of the gaussians for each of the original image/FFT/PSD/ACF. 
+# Step 2 - analyze the width of the gaussians for each of the original image/FFT/PSD/ACovF. 
 
 # Look at original image, and slice through center. 
 print 'Plotting Image'
@@ -124,25 +124,25 @@ fitval, expval = dofit(r, d, 0., sigma)
 doplot(x, d, fitval, expval, 'PSD1d')
 """
 
-# Now on to the ACF
-print 'Plotting ACF'
-gauss.showAcf2d()
+# Now on to the ACovF
+print 'Plotting ACovF'
+gauss.showAcovf2d()
 x = numpy.arange(-gauss.xcen, gauss.nx-gauss.xcen, 1.)
-d = gauss.acf.real[round(gauss.ny/2.0)][:]
-# Okay, ACF is actual inverse FFT of PSD, so in pixel scales, expect sigma_acf = 1/(sigma_psd_freq*2*PI)
+d = gauss.acovf.real[round(gauss.ny/2.0)][:]
+# Okay, ACovF is actual inverse FFT of PSD, so in pixel scales, expect sigma_acovf = 1/(sigma_psd_freq*2*PI)
 #   ... or = sigma_x*sqrt(2) because of squaring the gaussian during the PSD creation. 
-#sigma_acf = 1/(sigma_psd_freq*2.0*numpy.pi)
+#sigma_acovf = 1/(sigma_psd_freq*2.0*numpy.pi)
 mean = 0
-sigma_acf = sigma_x*numpy.sqrt(2)
-fitval, expval = dofit(x, d, mean, sigma_acf)
-doplot(x, d, fitval, expval, 'ACF2d slice')
+sigma_acovf = sigma_x*numpy.sqrt(2)
+fitval, expval = dofit(x, d, mean, sigma_acovf)
+doplot(x, d, fitval, expval, 'ACovF2d slice')
 
-# And look at the 1d ACF. 
-print 'Plotting acf 1d.'
-x = gauss.acfx
-d = gauss.acf1d.real
-sigma_acf = sigma_x*numpy.sqrt(2)
-fitval, expval = dofit(x, d, mean, sigma_acf)
-doplot(x, d, fitval, expval, 'ACF1d')
+# And look at the 1d ACovF. 
+print 'Plotting acovf 1d.'
+x = gauss.acovfx
+d = gauss.acovf1d.real
+sigma_acovf = sigma_x*numpy.sqrt(2)
+fitval, expval = dofit(x, d, mean, sigma_acovf)
+doplot(x, d, fitval, expval, 'ACovF1d')
 
 pylab.show()

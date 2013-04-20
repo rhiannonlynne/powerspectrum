@@ -33,11 +33,11 @@ class PImage():
     def zeroPad(self, width=None):
         """Add padding to the outside of the image data. Default width = 1/4 of image."""
         if width != None:
-            self.padx = numpy.floor(width)
-            self.pady = numpy.floor(width)
+            self.padx += numpy.floor(width)
+            self.pady += numpy.floor(width)
         else:
-            self.padx = numpy.floor(self.nx / 4.0)
-            self.pady = numpy.floor(self.ny / 4.0)
+            self.padx += numpy.floor(self.nx / 4.0)
+            self.pady += numpy.floor(self.ny / 4.0)
         newy = self.ny + int(2*self.padx)
         newx = self.nx + int(2*self.pady)
         newimage = numpy.zeros((newy, newx), 'float')
@@ -64,6 +64,38 @@ class PImage():
         self.image *= self.hanning
         self.hanningFilter = True
         return
+
+    def reflectEdges(self, width=None):
+        """Extend the edges of the image by reflection.
+        The corners aren't dealt with properly, but this might give some help when applying a hanningFilter after."""
+        # Extend the size of the image and do some bookkeeping.
+        if width == None:
+            width = min(self.nx, self.ny) / 4.0            
+        self.zeroPad(width)
+        # And then put reflected copy of data into the boundaries.        
+        #  Reflect/flip left edge.
+        xmin = self.padx
+        xmax = self.padx * 2 
+        ymin = self.pady
+        ymax = self.ny - self.pady
+        self.image[ymin:ymax, 0:xmin] = numpy.fliplr(self.image[ymin:ymax, xmin:xmax])
+        # Reflect/flip right edge
+        xmin = self.nx - self.padx*2
+        xmax = self.nx - self.padx
+        self.image[ymin:ymax, (self.nx-self.padx):self.nx] = numpy.fliplr(self.image[ymin:ymax, xmin:xmax])
+        # Reflect/flip bottom edge
+        xmin = self.padx
+        xmax = self.nx - self.padx
+        ymin = self.padx
+        ymax = self.padx * 2
+        self.image[0:self.pady, xmin:xmax] = numpy.flipud(self.image[ymin:ymax, xmin:xmax])
+        # Reflect/flip top edge
+        ymin = self.ny - self.pady*2
+        ymax = self.ny - self.pady
+        self.image[(self.ny - self.pady):self.ny, xmin:xmax] = numpy.flipud(self.image[ymin:ymax, xmin:xmax])
+        # I should interpolate over the corners, but .. todo.         
+        return
+        
         
     def calcFft(self):
         """Calculate the 2d FFT of the image (self.fimage).
@@ -147,30 +179,30 @@ class PImage():
         self.psdx = 1/(rcenters*2.0*numpy.pi) * numpy.sqrt(self.nx*self.ny)
         return
 
-    def calcAcf2d(self):
-        """Calculate the 2d auto correlation function. """
+    def calcAcovf2d(self):
+        """Calculate the 2d auto covariance function. """
         # See Wiener-Kinchine theorem
         if self.shift:
-            # Note, the ACF needs the unshifted 2d PSD for inverse FFT, so unshift.
+            # Note, the ACovF needs the unshifted 2d PSD for inverse FFT, so unshift.
             #  Then shift back again. 
-            self.acf = fftpack.fftshift(fftpack.ifft2(fftpack.ifftshift(self.psd2d)))
+            self.acovf = fftpack.fftshift(fftpack.ifft2(fftpack.ifftshift(self.psd2d)))
         else:
-            self.acf = fftpack.ifft2(self.psd2d)
+            self.acovf = fftpack.ifft2(self.psd2d)
         return
 
-    def calcAcf1d(self, min_npix=3, min_dr=1.0):
-        """Calculate the 1d average of the ACF. This is probably more intuitive than the PSD."""
+    def calcAcovf1d(self, min_npix=3, min_dr=1.0):
+        """Calculate the 1d average of the ACovF. """
         # Calculate all the radius values for all pixels. These are actually in 'pixel' space
-        #    (as ACF is FFT of PSD). 
+        #    (as ACovF is FFT of PSD). 
         rvals = numpy.hypot((self.xx-self.xcen), (self.yy-self.ycen)) + 0.5
-        # Sort the ACF2d by the radius values and make flattened representations of these.
+        # Sort the ACovF2d by the radius values and make flattened representations of these.
         idx = numpy.argsort(rvals.flatten())
         if self.shift:
-            dvals = self.acf.flatten()[idx].real
+            dvals = self.acovf.flatten()[idx].real
         else:
-            dvals = (fftpack.fftshift(self.acf)).flatten()[idx].real
+            dvals = (fftpack.fftshift(self.acovf)).flatten()[idx].real
         rvals = rvals.flatten()[idx]
-        # Set up bins uniform in npix per bin, for the 1d ACF calculation (like with PSD case). 
+        # Set up bins uniform in npix per bin, for the 1d ACovF calculation (like with PSD case). 
         #  but want to subdivide outer parts of image too much, so use a minimum of min_dr pix
         self.min_dr = min_dr
         self.min_npix = min_npix
@@ -190,25 +222,24 @@ class PImage():
         rprof = numpy.histogram(rvals, bins=rbins, weights=dvals)[0] / nvals
         # Calculate the central radius values used in the histograms
         rcenters =  (rbins[1:] + rbins[:-1])/2.0
-        # Set the value of the 1d ACF, and interpolate over any nans (where there were no pixels)
-        self.acf1d = numpy.interp(rcenters, rcenters[rprof==rprof], rprof[rprof==rprof])
-        self.acfx = rcenters
+        # Set the value of the 1d ACovF, and interpolate over any nans (where there were no pixels)
+        self.acovf1d = numpy.interp(rcenters, rcenters[rprof==rprof], rprof[rprof==rprof])
+        self.acovfx = rcenters
         return
 
     def calcSf(self):
-        """Calculate the structure function from the 1d ACF, discounting zeroPadding region. Result is scaled 0-1."""
+        """Calculate the structure function from the 1d ACovF, discounting zeroPadding region.
+        Structure function is calculated as SF = sqrt(ACovF(0) - ACovF), as described in powers_qs doc."""
         self.sfx = numpy.arange(0, (numpy.sqrt((self.nx/2.0 - self.padx)**2 + (self.ny/2.0 - self.pady)**2)), 1.0)
-        self.sf = numpy.interp(self.sfx, self.acfx, (1.0 - self.acf1d))        
-        # SF should be > 0, so scale .. might as well scale to be between 0 and 1.
-        self.sf = (self.sf - self.sf.min()) / (self.sf.max() - self.sf.min())
+        self.sf = numpy.interp(self.sfx, self.acovfx, (self.acovf1d[0] - self.acovf1d))        
         return
 
     def calcAll(self, min_npix=3, min_dr=3.):
         self.calcFft()
         self.calcPsd2d()
         self.calcPsd1d(min_npix=min_npix, min_dr=min_dr)
-        self.calcAcf2d()
-        self.calcAcf1d(min_npix=min_npix, min_dr=min_dr)
+        self.calcAcovf2d()
+        self.calcAcovf1d(min_npix=min_npix, min_dr=min_dr)
         self.calcSf()
         return
 
@@ -268,24 +299,25 @@ class PImage():
             self.fimageI = fftpack.fftshift(self.fimageI)
         return
     
-    def invertPsd1d(self, amp1d=None, phasespec=None, seed=None):
+    def invertPsd1d(self, psdx=None, psd1d=None, phasespec=None, seed=None):
         """Convert a 1d PSD, generate a phase spectrum (or use user-supplied values) into a 2d PSD (psd2dI)."""
         # Converting the 2d PSD into a 1d PSD is a lossy process, and then there is additional randomness
         #  added when the phase spectrum is not the same as the original phase spectrum, so this may or may not
         #  look that much like the original image (unless you keep the phases, doesn't look like image). 
         # 'Swing' the 1d PSD across the whole fov.         
-        if amp1d == None:
-            amp1d = self.psd1d
+        if psd1d == None:
+            psd1d = self.psd1d
             xr = self.rfreq / self.xfreqscale
         else:
-            xr = numpy.arange(0, len(amp1d), 1.0)
+            if psdx == None:
+                xr = numpy.arange(0, len(psd1d), 1.0)
         # Resample into even bins (definitely necessarily if using psd1d).
-        xrange = numpy.arange(0, max(self.xcen, self.ycen), 1.0)
-        amp1d = numpy.interp(xrange, xr, amp1d)
+        xrange = numpy.arange(0, numpy.sqrt(self.xcen**2 + self.ycen**2)+1.0, 1.0)
+        psd1d = numpy.interp(xrange, xr, psd1d, right=psd1d[len(psd1d)-1])
         # Calculate radii - distance from center.
         rad = numpy.hypot((self.yy-self.ycen), (self.xx-self.xcen))
         # Calculate the PSD2D from the 1d value.
-        self.psd2dI = numpy.interp(rad.flatten(), xrange, amp1d)
+        self.psd2dI = numpy.interp(rad.flatten(), xrange, psd1d)
         self.psd2dI = self.psd2dI.reshape(self.ny, self.nx)
         if phasespec == None:
             self._makeRandomPhases(seed=seed)
@@ -296,21 +328,21 @@ class PImage():
             self.psd2dI = fftpack.ifftshift(self.psd2dI)
         return
 
-    def invertAcf2d(self, useI=False, usePhasespec=True, seed=None):
-        """Convert the 2d ACF into a 2d PSD (psd2dI). """
+    def invertAcovf2d(self, useI=False, usePhasespec=True, seed=None):
+        """Convert the 2d ACovF into a 2d PSD (psd2dI). """
         if useI:
-            acf = self.acfI
+            acovf = self.acovfI
         else:
-            acf = self.acf
+            acovf = self.acovf
             self.phasespecI = self.phasespec
-        # Let user override phasespec if want to use real 2d ACF but random phases.
+        # Let user override phasespec if want to use real 2d ACovF but random phases.
         if not(usePhasespec):
             self._makeRandomPhases(seed=seed) 
-        # Calculate the 2dPSD from the ACF. 
+        # Calculate the 2dPSD from the ACovF. 
         if self.shift:
-            self.psd2dI = fftpack.ifftshift(fftpack.fft2(fftpack.fftshift(acf)))
+            self.psd2dI = fftpack.ifftshift(fftpack.fft2(fftpack.fftshift(acovf)))
         else:
-            self.psd2dI = fftpack.fft2(acf)
+            self.psd2dI = fftpack.fft2(acovf)
         # PSD2d should be entirely real and positive (PSD2d = |R(uv,)**2 + I(u,v)**2|
         #print 'PSD real limits', self.psd2dI.real.min(), self.psd2dI.real.max()
         #print 'PSD imaginary limits', self.psd2dI.imag.min(), self.psd2dI.imag.max()
@@ -318,28 +350,46 @@ class PImage():
         self.psd2dI = numpy.sqrt(numpy.abs(self.psd2dI)**2)
         return
 
-    def invertAcf1d(self, amp1d=None, phasespec=None, seed=None):
-        """Convert a 1d ACF into a 2d ACF (acfI). """
-        # 'Swing' the 1d ACF across the whole fov.         
-        if amp1d == None:
-            amp1d = self.acf1d
-            xr = self.acfx
+    def invertAcovf1d(self, acovfx=None, acovf1d=None, phasespec=None, seed=None):
+        """Convert a 1d ACovF into a 2d ACovF (acovfI). """
+        # 'Swing' the 1d ACovF across the whole fov.         
+        if acovf1d == None:
+            # Use self-set values.
+            acovf1d = self.acovf1d
+            xr = self.acovfx            
         else:
-            xr = numpy.arange(0, len(amp1d), 1.0)
-        # Resample into even bins (definitely necessarily if using acf1d).
-        xrange = numpy.arange(0, max(self.xcen, self.ycen), 1.0)
-        amp1d = numpy.interp(xrange, xr, amp1d)
-        # Calculate radii - distance from center.
+            if acovfx == None:
+                # If not given r values for acovf1d, assume they are even, 1 pixel spacing.
+                xr = numpy.arange(0, len(acovf1d), 1.0)
+        # Resample into even bins (definitely necessarily if using self.acovf1d).
+        xrange = numpy.arange(0, numpy.sqrt(self.xcen**2 + self.ycen**2)+1.0, 1.0)
+        acovf1d = numpy.interp(xrange, xr, acovf1d, right=acovf1d[len(acovf1d)-1])
+        # Calculate radii - distance from center for all pixels in image.
         rad = numpy.hypot((self.yy-self.ycen), (self.xx-self.xcen))
-        # Calculate the PSD2D from the 1d value.
-        self.acfI = numpy.interp(rad.flatten(), xrange, amp1d)
-        self.acfI = self.acfI.reshape(self.ny, self.nx)
+        # Calculate the ACovF2D from the 1d value.
+        self.acovfI = numpy.interp(rad.flatten(), xrange, acovf1d)
+        self.acovfI = self.acovfI.reshape(self.ny, self.nx)
         if phasespec == None:
             self._makeRandomPhases(seed=seed)
         else:
             self.phasespecI = phasespec
         if not(self.shift):
-            self.acfI = fftpack.fftshift(self.acfI)
+            self.acovfI = fftpack.fftshift(self.acovfI)
         return
 
-    
+    def invertSf(self, sfx, sf):
+        """Convert a structure function (sf) with r coordinates sfx into the 1-d ACovF.
+        Note definition of structure function here: SF = \sqrt(ACovF(0) - ACovF), as in powers_qs.pdf doc."""
+        # Resample onto even, 1.0 pixel grid if needed. 
+        xsteps = numpy.diff(sfx)
+        if not(numpy.all(xsteps==1)):
+            xrange = numpy.arange(0, sfx.max(), 1.0)
+            sf = numpy.interp(xrange, sfx, sf)
+            sfx = xrange
+        self.sfx = sfx
+        self.sf = sf
+        # Calcluate 1-d ACovF
+        self.acovf1d = sf[len(sfx)-1] - sf
+        self.acovfx = sfx
+        # Now you can call invertAcovf1d directly.  (invertAcovf1d(phasespec/seed))
+        return
