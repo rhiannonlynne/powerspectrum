@@ -1,5 +1,6 @@
 import numpy
 import pylab
+from scipy import fftpack
 # For plotting an image in log scale
 from matplotlib.colors import LogNorm
 from pImage import PImage

@@ -249,9 +249,14 @@ class PImage():
         # Generate random phases (uniform -360 to 360)
         self.phasespecI = numpy.random.uniform(low=-numpy.pi, high=numpy.pi, size=[self.ny, self.nx])
         # Generate random phases with gaussian distribution around 0
-        #self.phasespecI = numpy.random.normal(loc=0, scale=(numpy.pi*2.0 / 2.0), size=[self.ny, self.nx])
+        #self.phasespecI = 
+        #    numpy.random.normal(loc=0, scale=(numpy.pi*2.0 / 2.0), size=[self.ny, self.nx])
         # Wrap into -180 to 180 range
         self.phasespecI = (self.phasespecI-self.phasespecI.min()) % (numpy.pi*2.0) - (numpy.pi)
+        # Set phase for [0][0] component to be zero -- this preserves overall mean value of image,
+        #  as that is the value of the FFT.real[0][0] element (so must avoid putting any value into
+        #   imaginary component of FFT image for this one mode only). 
+        self.phasespecI[0][0] = 0
         return
 
     def invertFft(self, useI=False):
