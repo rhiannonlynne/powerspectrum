@@ -10,15 +10,15 @@ from scipy import fftpack
 figformat='png'
 
 do_example_lines =  True
-do_example_lines =  False
+#do_example_lines =  False
 do_gaussian_example = True
-do_gaussian_example = False
+#do_gaussian_example = False
 do_compare1d_psd_acovf = True
-do_compare1d_psd_acovf = False
+#do_compare1d_psd_acovf = False
 do_inversion = True
-do_inversion = False
+#do_inversion = False
 do_elliptical = True
-do_elliptical = False
+#do_elliptical = False
 do_clouds = True
 #do_clouds = False
 

@@ -18,9 +18,18 @@ def ComputeStructureFunction(x0=0.0, x1=1.75, y1=0.04, ymm=0.08, xmax=10.):
     SF = ymm*(1.-numpy.exp(-al*xsf))   
     return xsf, SF
 
+def readSF(file):
+    import useful_input as ui
+    data = ui.readDatafile(file, ('theta', 'sf'))
+    # Convert arcminutes to degrees 
+    data['theta'] = data['theta'] / 60.0
+    # Convert Tim's SF**2 to SF (mag**2 -> mag)
+    data['sf'] = numpy.sqrt(data['sf'])
+    return data['theta'], data['sf']
     
 if __name__ == "__main__":
-    xsf, SF = ComputeStructureFunction()
+    #xsf, SF = ComputeStructureFunction()
+    xsf, SF = readSF('sf_arma.dat')
     # Plot result - looks like X in degrees. 
     pylab.figure()
     pylab.plot(xsf, SF)
@@ -36,18 +45,20 @@ if __name__ == "__main__":
     pixscale = 2*rad_fov / float(imsize)
     print 'Rad_fov', rad_fov, 'Imsize', imsize, 'Pixscale', pixscale, 'deg/pix', '(', pixscale*60.*60., 'arcsec/pix)'
     # set up 1d SF with desired scale and pixel scale
+    """
     condition = (xsf <= rad_fov)
     xr = xsf[condition] / pixscale # xr = in pixels, over range that want to simulate
     xrpix = numpy.arange(0, imsize, 1.0)
     sfpix = numpy.interp(xrpix, xr, SF[condition])
+    """
+    condition = (xsf <= rad_fov*numpy.sqrt(2))
+    xr = xsf[condition] / pixscale # xr = in pixels, over range that want to simulate
+    xrpix = numpy.arange(0, imsize/2.*numpy.sqrt(2), 1.0)
+    sfpix = numpy.interp(xrpix, xr, SF[condition])
 
     # try making image
     im = PImagePlots(shift=True, nx= imsize, ny=imsize)
-    im.invertSf(sfx=xrpix, sf=sfpix)
-    im.invertAcovf1d()    
-    im.invertAcovf2d(useI=True)
-    im.invertPsd2d(useI=True)
-    im.invertFft(useI=True)    
+    im.makeImageFromSf(sfx=xrpix, sf=sfpix)
     im.showImageI()
     pylab.savefig('clouds_1.png', format='png')
 
@@ -90,7 +101,6 @@ if __name__ == "__main__":
     pylab.xlabel('Degrees')
     pylab.savefig('clouds_sf_new.png', format='png')
     
-
 
     pylab.show()
 

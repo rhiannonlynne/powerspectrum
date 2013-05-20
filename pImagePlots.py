@@ -49,7 +49,13 @@ class PImagePlots(PImage):
             raise Exception('Source must be one of image/fft/psd/acovf')
         return
 
-    def showImage(self, xlim=None, ylim=None, clims=None, cmap=None):
+    def showImage(self, xlim=None, ylim=None, clims=None, cmap=None, copy=False, stats=True):
+        if copy:
+            # useful if you're going to apply a hanning filter or something later, but
+            # want to keep an imge of the original
+            image = numpy.copy(self.image)
+        else:
+            image = self.image
         pylab.figure()
         pylab.title('Image')
         if xlim == None:
@@ -65,15 +71,18 @@ class PImagePlots(PImage):
             y0 = ylim[0]
             y1 = ylim[1]
         if clims == None:
-            pylab.imshow(self.image, origin='lower', cmap=cmap)
+            pylab.imshow(image, origin='lower', cmap=cmap)
         else:
-            pylab.imshow(self.image, origin='lower', vmin=clims[0], vmax=clims[1], cmap=cmap)
+            pylab.imshow(image, origin='lower', vmin=clims[0], vmax=clims[1], cmap=cmap)
         pylab.xlabel('X')
         pylab.ylabel('Y')
         cb = pylab.colorbar()
         clims = cb.get_clim()
         pylab.xlim(x0, x1)
         pylab.ylim(y0, y1)
+        if stats:
+            statstxt = 'Mean/Stdev/Min/Max:\n %.2f/%.2f/%.2f/%.2f' %(numpy.mean(image), numpy.std(image), image.min(), image.max())
+            pylab.figtext(0.75, 0.03, statstxt)
         return clims
 
     def showImageI(self, xlim=None, ylim=None, clims=None, cmap=None):
@@ -163,7 +172,7 @@ class PImagePlots(PImage):
             cb = pylab.colorbar(shrink=shrinkratio)
         return
 
-    def showFftI(self, real=True, imag=True, clims=None):
+    def showFftI(self, real=True, imag=True, clims=None, log=False):
         if ((real == True) & (imag==True)):
             p = 2
             shrinkratio=0.7
@@ -249,7 +258,7 @@ class PImagePlots(PImage):
         pylab.figure()
         pylab.title('Reconstructed 2D Power Spectrum')
         vmax = self.psd2dI.max()
-        vmin = max(vmax-10e20, self.psd2d.min())
+        vmin = max(vmax-10e20, self.psd2dI.min())
         vmin = max(vmin, 0.0001)
         if log==True:
             from matplotlib.colors import LogNorm
@@ -401,7 +410,7 @@ class PImagePlots(PImage):
                     vmax = max(vmax, 0.00001)
                     vmin = max(vmin, 0.000001)            
             pylab.subplot(1,p,p)
-            pylab.title('Reconstructed Imaginary ACovF')
+            pylab.title('Reconstructed Imag. ACovF')
             if log==True:
                 from matplotlib.colors import LogNorm
                 norml = LogNorm(vmin=vmin, vmax=vmax)
@@ -417,7 +426,10 @@ class PImagePlots(PImage):
 
     def showAcovf1d(self, linear=False, comparison=None, legendlabels=['Image', 'Comparison']):        
         pylab.figure()
-        pylab.title('1D ACovF: min_npix %.0f, min_dr %.2f' %(self.min_npix, self.min_dr))
+        try:
+            pylab.title('1D ACovF: min_npix %.0f, min_dr %.2f' %(self.min_npix, self.min_dr))
+        except:
+            pylab.title('1D ACovF')
         maxscale_image = (numpy.sqrt((self.nx/2.0 - self.padx)**2 + (self.ny/2.0 - self.pady)**2))
         condition = (self.acovfx <= maxscale_image)
         pylab.plot(self.acovfx[condition], self.acovf1d[condition], 'b-', label=legendlabels[0])

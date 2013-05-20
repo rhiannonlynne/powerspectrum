@@ -4,6 +4,8 @@ from scipy import fftpack
 class PImage():
     def __init__(self, shift=True, nx=1000, ny=1000):
         """Init. Does nothing."""
+        if (nx%2 != 0) | (ny%2 !=0):
+            raise Exception('Make nx and ny divisible by 2')
         # Note that numpy array translate to images in [y][x] order!
         self.shift = shift
         self.nx = nx
@@ -23,6 +25,8 @@ class PImage():
         else:
             self.image = imdat    
         self.ny, self.nx = self.image.shape
+        if (self.nx%2 != 0) | (self.ny%2 !=0):
+            raise Exception('Make image size in x and y divisible by 2')
         self.yy, self.xx = numpy.indices(self.image.shape)
         self.padx = 0.0
         self.pady = 0.0
@@ -231,10 +235,10 @@ class PImage():
         """Calculate the structure function from the 1d ACovF, discounting zeroPadding region.
         Structure function is calculated as SF = sqrt(ACovF(0) - ACovF), as described in powers_qs doc."""
         self.sfx = numpy.arange(0, (numpy.sqrt((self.nx/2.0 - self.padx)**2 + (self.ny/2.0 - self.pady)**2)), 1.0)
-        self.sf = numpy.interp(self.sfx, self.acovfx, (self.acovf1d[0] - self.acovf1d))        
+        self.sf = numpy.interp(self.sfx, self.acovfx, numpy.sqrt(self.acovf1d[0] - self.acovf1d))        
         return
 
-    def calcAll(self, min_npix=3, min_dr=3.):
+    def calcAll(self, min_npix=2, min_dr=1.):
         self.calcFft()
         self.calcPsd2d()
         self.calcPsd1d(min_npix=min_npix, min_dr=min_dr)
@@ -244,19 +248,22 @@ class PImage():
         return
 
     def _makeRandomPhases(self, seed=None):
+        # Generate random phases for construction of real image. 
+        # There should be some symmetry here - real images should have negative and positive frequency conjugate symmetry. 
+        # It's pretty close to upper right quarter / lower left quarter are negative, mirror copies (same for upper left/lower right quarters).
+        # This is true for unshifted images, not for shifted images, so by copying/mirroring  these quarters, must reconstruct image accounting for this.
+        # The first column/row are not generally part of this symmetry, as these are the 0 frequency (in some component) values.
+        # To preserve the mean of the image, the phase for the 0,0 frequency should be 0 or pi. 
         if seed != None:
             numpy.random.seed(seed)
-        # Generate random phases (uniform -360 to 360)
+        # Generate random phases (uniform -360 to 360) for whole image -- will write over some sections. 
         self.phasespecI = numpy.random.uniform(low=-numpy.pi, high=numpy.pi, size=[self.ny, self.nx])
-        # Generate random phases with gaussian distribution around 0
-        #self.phasespecI = 
-        #    numpy.random.normal(loc=0, scale=(numpy.pi*2.0 / 2.0), size=[self.ny, self.nx])
-        # Wrap into -180 to 180 range
-        self.phasespecI = (self.phasespecI-self.phasespecI.min()) % (numpy.pi*2.0) - (numpy.pi)
-        # Set phase for [0][0] component to be zero -- this preserves overall mean value of image,
-        #  as that is the value of the FFT.real[0][0] element (so must avoid putting any value into
-        #   imaginary component of FFT image for this one mode only). 
+        # Set 0,0 to 0 to preserve overall mean value of image. (= 0 means no value into imaginary component of FFT of image). 
         self.phasespecI[0][0] = 0
+        # Mirror upper left corner into lower right corner. 
+        self.phasespecI[self.xcen+1:self.nx, self.ycen+1:self.ny] = -1.*numpy.fliplr(numpy.flipud(self.phasespecI[1:self.xcen, 1:self.ycen]))
+        # Mirror upper right corner into lower left corner. 
+        self.phasespecI[1:self.xcen, self.ycen+1:self.ny] = -1.*numpy.fliplr(numpy.flipud(self.phasespecI[self.xcen+1:self.nx, 1:self.ycen]))
         return
 
     def invertFft(self, useI=False):
@@ -344,6 +351,8 @@ class PImage():
         if not(usePhasespec):
             self._makeRandomPhases(seed=seed) 
         # Calculate the 2dPSD from the ACovF. 
+        # Note that if the ACovF has values reaching all the way to the edges, this will
+        # induce noise into the PSD2d (just as the discontinuity would induce noise into the FFT of an image).
         if self.shift:
             self.psd2dI = fftpack.ifftshift(fftpack.fft2(fftpack.fftshift(acovf)))
         else:
@@ -355,7 +364,7 @@ class PImage():
         self.psd2dI = numpy.sqrt(numpy.abs(self.psd2dI)**2)
         return
 
-    def invertAcovf1d(self, acovfx=None, acovf1d=None, phasespec=None, seed=None):
+    def invertAcovf1d(self, acovfx=None, acovf1d=None, phasespec=None, seed=None, reduceNoise=True):
         """Convert a 1d ACovF into a 2d ACovF (acovfI). """
         # 'Swing' the 1d ACovF across the whole fov.         
         if acovf1d == None:
@@ -366,13 +375,23 @@ class PImage():
             if acovfx == None:
                 # If not given r values for acovf1d, assume they are even, 1 pixel spacing.
                 xr = numpy.arange(0, len(acovf1d), 1.0)
-        # Resample into even bins (definitely necessarily if using self.acovf1d).
-        xrange = numpy.arange(0, numpy.sqrt(self.xcen**2 + self.ycen**2)+1.0, 1.0)
-        acovf1d = numpy.interp(xrange, xr, acovf1d, right=acovf1d[len(acovf1d)-1])
+        # It turns out that if acovf1d extends past min(xcen/ycen) -- i.e., extends into the 'corners' of the image -- then
+        #  we get noise in the calculation of the PSD2d, which is an FFT of the ACovF2d. This noise results in linear features in the
+        #  reconstructed image, which is bad. 
+        # So, to avoid this, we must make the acovf1d a single value after rmax = min(xcen/ycen). Could be zero, with a rolloff .. but it 
+        #  seems like this is unnecessary. So, unless reduceNoise is set to False, just truncate acovf1d at rmax and extend with constant value.
+        if (xr.max() > (min(self.xcen, self.ycen))) & reduceNoise:
+            rmax = min(self.xcen, self.ycen)
+            condition = (xr < rmax)
+            acovf1d = numpy.interp(xr[condition], xr, acovf1d)
+            xr = xr[condition]
+            #rin = rmax - rmax/10.0
+            #filter = numpy.where(xr > rmax, 0, numpy.where(xr < rin, 1, 0.5 - 0.5*numpy.cos(numpy.pi*(1-(xr-rin)/(rmax-rin)))))
+            #acovf1d *= filter
         # Calculate radii - distance from center for all pixels in image.
         rad = numpy.hypot((self.yy-self.ycen), (self.xx-self.xcen))
         # Calculate the ACovF2D from the 1d value.
-        self.acovfI = numpy.interp(rad.flatten(), xrange, acovf1d)
+        self.acovfI = numpy.interp(rad.flatten(), xr, acovf1d)
         self.acovfI = self.acovfI.reshape(self.ny, self.nx)
         if phasespec == None:
             self._makeRandomPhases(seed=seed)
@@ -385,16 +404,21 @@ class PImage():
     def invertSf(self, sfx, sf):
         """Convert a structure function (sf) with r coordinates sfx into the 1-d ACovF.
         Note definition of structure function here: SF = \sqrt(ACovF(0) - ACovF), as in powers_qs.pdf doc."""
-        # Resample onto even, 1.0 pixel grid if needed. 
-        xsteps = numpy.diff(sfx)
-        if not(numpy.all(xsteps==1)):
-            xrange = numpy.arange(0, sfx.max(), 1.0)
-            sf = numpy.interp(xrange, sfx, sf)
-            sfx = xrange
         self.sfx = sfx
         self.sf = sf
         # Calcluate 1-d ACovF
-        self.acovf1d = sf[len(sfx)-1] - sf
-        self.acovfx = sfx
+        self.acovf1d = sf[len(sfx)-1]**2 - sf**2
+        self.acovfx = numpy.copy(sfx)
         # Now you can call invertAcovf1d directly.  (invertAcovf1d(phasespec/seed))
+        return
+
+    def makeImageFromSf(self, sfx, sf, reduceNoise=True):
+        """Invert SF all the way back to ImageI."""
+        self.invertSf(sfx, sf)
+        self.invertAcovf1d(reduceNoise=reduceNoise)
+        self.invertAcovf2d(useI=True)
+        self.invertPsd2d(useI=True)
+        self.invertFft(useI=True)
+        self.xfreq = fftpack.fftfreq(self.nx, 1.0)
+        self.yfreq = fftpack.fftfreq(self.ny, 1.0)
         return
